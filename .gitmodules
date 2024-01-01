@@ -4,3 +4,6 @@
 [submodule "lib/solady"]
 	path = lib/solady
 	url = https://github.com/vectorized/solady
+[submodule "lib/accounts"]
+	path = lib/accounts
+	url = https://github.com/NaniDAO/accounts
