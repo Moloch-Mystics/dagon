@@ -69,7 +69,7 @@ contract Dagon is ERC6909 {
 
     /// @dev The token interface standards enum.
     enum TokenStandard {
-        OWNER,
+        DAGON,
         ERC20,
         ERC721,
         ERC1155,
@@ -148,7 +148,7 @@ contract Dagon is ERC6909 {
                     ) {
                         pos += 85;
                         prev = owner;
-                        tally += set.std == TokenStandard.OWNER
+                        tally += set.std == TokenStandard.DAGON
                             ? balanceOf(owner, uint256(uint160(msg.sender)))
                             : set.std == TokenStandard.ERC20 || set.std == TokenStandard.ERC721
                                 ? set.tkn.balanceOf(owner)
@@ -202,6 +202,7 @@ contract Dagon is ERC6909 {
         virtual
         returns (uint256)
     {
+        bytes32 hash = SignatureCheckerLib.toEthSignedMessageHash(userOpHash);
         Settings memory set = _settings[account];
         unchecked {
             uint256 pos;
@@ -212,19 +213,19 @@ contract Dagon is ERC6909 {
                 if (
                     SignatureCheckerLib.isValidSignatureNow(
                         owner = address(bytes20(signature[pos:pos + 20])),
-                        SignatureCheckerLib.toEthSignedMessageHash(userOpHash),
+                        hash,
                         signature[pos + 20:pos + 85]
                     ) && voted[owner][userOpHash] == 0 // Check double voting.
                 ) {
                     pos += 85;
-                    tally += voted[owner][userOpHash] = set.std == TokenStandard.OWNER
+                    tally += voted[owner][userOpHash] = set.std == TokenStandard.DAGON
                         ? balanceOf(owner, uint256(uint160(account)))
                         : set.std == TokenStandard.ERC20 || set.std == TokenStandard.ERC721
                             ? set.tkn.balanceOf(owner)
                             : set.tkn.balanceOf(owner, uint256(uint160(account)));
                 }
             }
-            return votingTally[userOpHash] += tally;
+            return votingTally[hash] += tally;
         }
     }
 
@@ -313,7 +314,7 @@ contract Dagon is ERC6909 {
         if (
             threshold
                 > (
-                    set.std == TokenStandard.OWNER
+                    set.std == TokenStandard.DAGON
                         ? totalSupply(uint256(uint160(msg.sender)))
                         : set.std == TokenStandard.ERC20 || set.std == TokenStandard.ERC721
                             ? set.tkn.totalSupply()

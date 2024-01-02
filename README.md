@@ -1,11 +1,28 @@
-# Dagon
+# Dagon (𒀭)
+> minimalist and modular governance abstraction for accounts today through singleton extensions
 
-Dagon is a contract singleton that allows any account to give any token threshold the right to sign for it.
+Built with *[Foundry](https://github.com/foundry-rs/forge-std)* and *[Solady](https://github.com/vectorized/solady)*.
 
-It is thus proposed as a gas-efficient (and *AA-forward*) abstraction layer to blockchain-based governance. Chiefly, by just validating contract signatures and not dealing with execution or more opinionated proposal logic, Dagon can complement more communities today, as well as serve as a source of record for the greater DAO ecosystem, which are all free to implement their own custom hooks and checks to Dagon validation. In V0, the Dagon pattern can be used for offchain polling for any token, including `ERC-20`, `ERC-721`, `ERC-1155`, `ERC-6909`, and includes a native token mint and burn function, `DAGON`, but can also validate onchain operations that submit ownership to Dagon validation using `ERC-173`.
+## Premise
 
-For example, <Insert> DAOs might use Dagon in small ways to start, such as to validate their membership signatures in the typical snapshot proposal and for simple dapp display purposes, or if Dagon is further registered as the owner of their group smart account, Dagon can work as a proposal engine, validating executions for smart accounts and timelocks. In this mode, Dagon supports both token-weighted and m/n signature schemes. Collection of Dagon signatures is gasless, and can be posted in a single transaction and block fee using `isValidSignature()` in an ERC-4337 userOp flow.
+Dagon is a contract singleton that allows any account to give any token a threshold right to sign for it. It thus supports existing token communities and DAO deployments right out-of-the-gate. Dagon is optimized especially for most off-chain voting methods, such as multisig and weighted snapshot proposals, as well, initially offers a platform-agnostic upgrade path into smart account-based governance abstraction.
 
-Overall, Dagon is designed with `ERC-4337` and account abstraction in mind to validate group userOps and custody, but works well with accounts that at least support both the `ERC-1271` (Contract Signatures) and `ERC-173` (Ownership) interfaces. Even so, an EOA can nonetheless mint a Dagon personal token and authorize a threshold to return an `isValidSignature()` sign-off for off-chain or legal purposes. There is likely much to explore.
+Chiefly, by just validating contract signature process and not dealing with execution or more opinionated proposal logic, Dagon can complement more organizations today, as well as serve as a source of record for the greater DAO ecosystem, which are all free to implement their own custom hooks and checks to Dagon validation. In V0, which is focused as a voting engine, the Dagon pattern can be used for offchain polling for any token, including `ERC-20`, `ERC-721`, `ERC-1155`, `ERC-6909`, and includes a native token mint and burn function to allow tokens to upgrade (or new tokens to be issued) under `DAGON` (itself `ERC-6909`), but can also validate onchain user operations (userOps) that submit ownership to Dagon validation using the `ERC-173` `transferOwnership` flow.
 
+For example, <Insert> DAO might start to use Dagon in small ways as an extension to its ordinary operating system, such as to prove the results of group polls and for simple dapp display purposes, but if Dagon is also registered as the owner of a group smart account, Dagon can then work as the DAO's proposal engine, validating userOps and letting them be posted onchain. In this mode, Dagon supports both token-weighted and m/n signature schemes. Collection of Dagon signatures is gasless, and can be posted in a single transaction and block fee using `isValidSignature()` in the typical `ERC-4337` userOp flow.
 
+Overall, Dagon is designed with `ERC-4337` and account abstraction in mind, but works well with accounts that at least support both the `ERC-1271` (Contract Signatures) and `ERC-173` (Ownership) standard interfaces. (Even so, an EOA can nonetheless mint a Dagon personal token and authorize a threshold to sign-off for off-chain or legal purposes.) There is likely much to explore.
+
+## Getting Started
+
+Run: `curl -L https://foundry.paradigm.xyz | bash && source ~/.bashrc && foundryup`
+
+Build the foundry project with `forge build`. Run contract tests with `forge test`. Measure gas fees with `forge snapshot`. Format code with `forge fmt`.
+
+## Disclaimer
+
+*These smart contracts and testing suite are being provided as is. No guarantee, representation or warranty is being made, express or implied, as to the safety or correctness of anything provided herein or through related user interfaces. This repository and related code have not been audited and as such there can be no assurance anything will work as intended, and users may experience delays, failures, errors, omissions, loss of transmitted information or loss of funds. The creators are not liable for any of the foregoing. Users should proceed with caution and use at their own risk.*
+
+## License
+
+See [LICENSE](./LICENSE) for more details.

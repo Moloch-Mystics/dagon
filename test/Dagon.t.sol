@@ -152,7 +152,7 @@ contract DagonTest is Test {
 
         Dagon.Settings memory setting;
         setting.tkn = ITokenOwner(address(0));
-        setting.std = Dagon.TokenStandard.OWNER;
+        setting.std = Dagon.TokenStandard.DAGON;
         setting.threshold = 1;
 
         Dagon.Metadata memory meta;
@@ -230,7 +230,7 @@ contract DagonTest is Test {
     }
 
     function testSetToken(ITokenOwner tkn) public {
-        Dagon.TokenStandard std = Dagon.TokenStandard.OWNER;
+        Dagon.TokenStandard std = Dagon.TokenStandard.DAGON;
         testInstall();
         vm.prank(address(account));
         owners.setToken(tkn, std);
@@ -260,6 +260,7 @@ contract DagonTest is Test {
 
     function testTransfer(address from, address to, uint96 amount) public {
         vm.assume(from != alice && to != alice);
+        vm.assume(to != address(0) && to != address(0xff));
         vm.assume(amount < type(uint96).max);
         testInstall();
         vm.prank(address(account));
@@ -355,6 +356,24 @@ contract DagonTest is Test {
         assertEq(validationData, 0x00);
     }
 
+    function testIsValidSignatureOnchain() public {
+        testInstall();
+        bytes32 userOpHash = keccak256("OWN");
+        NaniAccount.UserOperation memory userOp;
+        userOp.signature = "";
+        require(userOp.signature.length == 0, "INVALID_LEN");
+        userOp.sender = address(account);
+
+        bytes memory signature =
+            abi.encodePacked(alice, _sign(alicePk, _toEthSignedMessageHash(userOpHash)));
+
+        owners.vote(address(account), userOpHash, signature);
+
+        vm.prank(_ENTRY_POINT);
+        uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
+        assertEq(validationData, 0x00);
+    }
+
     // In 2-of-3, 3 signed.
     function testIsValidSignature3of3() public payable {
         Dagon.Ownership[] memory _owners = new Dagon.Ownership[](3);
@@ -372,7 +391,7 @@ contract DagonTest is Test {
 
         Dagon.Settings memory setting;
         setting.tkn = ITokenOwner(address(0));
-        setting.std = Dagon.TokenStandard.OWNER;
+        setting.std = Dagon.TokenStandard.DAGON;
         setting.threshold = 1;
 
         Dagon.Metadata memory meta;
@@ -430,7 +449,7 @@ contract DagonTest is Test {
 
         Dagon.Settings memory setting;
         setting.tkn = ITokenOwner(address(0));
-        setting.std = Dagon.TokenStandard.OWNER;
+        setting.std = Dagon.TokenStandard.DAGON;
         setting.threshold = 1;
 
         Dagon.Metadata memory meta;
@@ -486,7 +505,7 @@ contract DagonTest is Test {
 
         Dagon.Settings memory setting;
         setting.tkn = ITokenOwner(address(0));
-        setting.std = Dagon.TokenStandard.OWNER;
+        setting.std = Dagon.TokenStandard.DAGON;
         setting.threshold = 2;
 
         Dagon.Metadata memory meta;
@@ -540,7 +559,7 @@ contract DagonTest is Test {
 
         Dagon.Settings memory setting;
         setting.tkn = ITokenOwner(address(0));
-        setting.std = Dagon.TokenStandard.OWNER;
+        setting.std = Dagon.TokenStandard.DAGON;
         setting.threshold = 40;
 
         Dagon.Metadata memory meta;
@@ -601,7 +620,7 @@ contract DagonTest is Test {
 
         Dagon.Settings memory setting;
         setting.tkn = ITokenOwner(address(0));
-        setting.std = Dagon.TokenStandard.OWNER;
+        setting.std = Dagon.TokenStandard.DAGON;
         setting.threshold = 40;
 
         Dagon.Metadata memory meta;
@@ -1103,7 +1122,7 @@ contract DagonTest is Test {
 
         Dagon.Settings memory setting;
         setting.tkn = ITokenOwner(address(0));
-        setting.std = Dagon.TokenStandard.OWNER;
+        setting.std = Dagon.TokenStandard.DAGON;
         setting.threshold = 40;
 
         Dagon.Metadata memory meta;
