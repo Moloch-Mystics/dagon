@@ -1,3 +1,4 @@
+// ᗪᗩGOᑎ 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.19;
 
@@ -5,7 +6,7 @@ import {ERC6909} from "@solady/src/tokens/ERC6909.sol";
 import {SignatureCheckerLib} from "@solady/src/utils/SignatureCheckerLib.sol";
 
 /// @notice Simple ownership singleton for smart accounts. DAO-agnostic.
-/// @dev Modified from nani.eth (https://github.com/NaniDAO/accounts/blob/main/src/ownership/Owners.sol)
+/// @dev Support for ERC-173, ERC-1271 and ERC-4337 is recommended for users.
 contract Dagon is ERC6909 {
     /// ======================= CUSTOM ERRORS ======================= ///
 
@@ -67,7 +68,7 @@ contract Dagon is ERC6909 {
 
     /// =========================== ENUMS =========================== ///
 
-    /// @dev The token interface standards enum.
+    /// @dev The token standard interface enum.
     enum TokenStandard {
         DAGON,
         ERC20,
