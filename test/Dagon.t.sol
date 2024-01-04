@@ -59,8 +59,20 @@ contract MockERC6909TotalSupply is MockERC6909 {
 }
 
 contract MockAuth {
-    function canTransfer(address, address, uint256, uint256) public payable {
-        return;
+    function validateTransfer(address, address, uint256, uint256)
+        public
+        payable
+        returns (uint256)
+    {
+        return 0;
+    }
+
+    function validateCall(address, address, uint256, bytes calldata)
+        public
+        payable
+        returns (uint256)
+    {
+        return 0;
     }
 }
 

@@ -80,17 +80,17 @@ contract Dagon is ERC6909 {
     /// ========================== STORAGE ========================== ///
 
     /// @dev Stores mapping of metadata settings to account token IDs.
-    /// note: IDs are unique to addresses (uint256(uint160(account))).
+    /// note: IDs are unique to addresses (`uint256(uint160(account))`).
     mapping(uint256 id => Metadata) internal _metadata;
 
     /// @dev Stores mapping of ownership settings to accounts.
     mapping(address account => Settings) internal _settings;
 
-    /// @dev Stores mapping of voting tallies to userOp hashes.
-    mapping(bytes32 userOpHash => uint256) public votingTally;
+    /// @dev Stores mapping of voting tallies to signed userOp hashes.
+    mapping(bytes32 signedHash => uint256) public votingTally;
 
-    /// @dev Stores mapping of account owner voting shares cast on userOp hashes.
-    mapping(address owner => mapping(bytes32 userOpHash => uint256 shares)) public voted;
+    /// @dev Stores mapping of account owner voting shares cast on signed userOp hashes.
+    mapping(address owner => mapping(bytes32 signedHash => uint256 shares)) public voted;
 
     /// ====================== ERC6909 METADATA ====================== ///
 
@@ -109,8 +109,7 @@ contract Dagon is ERC6909 {
         return _metadata[id].tokenURI;
     }
 
-    /// @dev Stores mapping of share balance supplies to accounts.
-    /// This is used for ownership settings without external tokens.
+    /// @dev Returns the total supply for token `id` using this contract.
     function totalSupply(uint256 id) public view virtual returns (uint256) {
         return _metadata[id].totalSupply;
     }
@@ -124,7 +123,7 @@ contract Dagon is ERC6909 {
     /// =================== VALIDATION OPERATIONS =================== ///
 
     /// @dev Validates ERC1271 signature with additional auth logic flow among owners.
-    /// note: This implementation is designed to be the transferred-to owner of accounts.
+    /// note: This implementation is designed to be the ERC-173-owner-of-4337-accounts.
     function isValidSignature(bytes32 hash, bytes calldata signature)
         public
         view
@@ -185,7 +184,7 @@ contract Dagon is ERC6909 {
         if (auth != IAuth(address(0))) {
             (address target, uint256 value, bytes memory data) =
                 abi.decode(userOp.callData[4:], (address, uint256, bytes));
-            auth.canCall(msg.sender, target, value, data);
+            auth.validateCall(msg.sender, target, value, data);
         }
         if (
             isValidSignature(
@@ -196,7 +195,7 @@ contract Dagon is ERC6909 {
 
     /// ===================== VOTING OPERATIONS ===================== ///
 
-    /// @dev Casts account owner voting shares on a given userOp hash.
+    /// @dev Casts account owner voting shares on a given ERC4337 userOp hash.
     function vote(address account, bytes32 userOpHash, bytes calldata signature)
         public
         payable
@@ -216,10 +215,10 @@ contract Dagon is ERC6909 {
                         owner = address(bytes20(signature[pos:pos + 20])),
                         hash,
                         signature[pos + 20:pos + 85]
-                    ) && voted[owner][userOpHash] == 0 // Check double voting.
+                    ) && voted[owner][hash] == 0 // Check double voting.
                 ) {
                     pos += 85;
-                    tally += voted[owner][userOpHash] = set.std == TokenStandard.DAGON
+                    tally += voted[owner][hash] = set.std == TokenStandard.DAGON
                         ? balanceOf(owner, uint256(uint160(account)))
                         : set.std == TokenStandard.ERC20 || set.std == TokenStandard.ERC721
                             ? set.tkn.balanceOf(owner)
@@ -266,70 +265,6 @@ contract Dagon is ERC6909 {
         IOwnable(msg.sender).requestOwnershipHandover();
     }
 
-    /// ==================== OWNERSHIP OPERATIONS ==================== ///
-
-    /// @dev Returns the account settings.
-    function getSettings(address account)
-        public
-        view
-        virtual
-        returns (ITokenOwner tkn, uint88 threshold, TokenStandard std)
-    {
-        tkn = _settings[account].tkn;
-        threshold = _settings[account].threshold;
-        std = _settings[account].std;
-    }
-
-    /// @dev Returns the account metadata.
-    function getMetadata(address account)
-        public
-        view
-        virtual
-        returns (
-            string memory _name,
-            string memory _symbol,
-            string memory _tokenURI,
-            IAuth _authority
-        )
-    {
-        uint256 id = uint256(uint160(account));
-        _name = _metadata[id].name;
-        _symbol = _metadata[id].symbol;
-        _tokenURI = _metadata[id].tokenURI;
-        _authority = _metadata[id].authority;
-    }
-
-    /// @dev Sets new authority contract for the caller account.
-    function setAuth(IAuth auth) public payable virtual {
-        emit AuthSet(msg.sender, (_metadata[uint256(uint160(msg.sender))].authority = auth));
-    }
-
-    /// @dev Sets new token metadata URI for the caller account.
-    function setURI(string calldata uri) public payable virtual {
-        emit URISet(msg.sender, (_metadata[uint256(uint160(msg.sender))].tokenURI = uri));
-    }
-
-    /// @dev Sets new ownership threshold for the caller account.
-    function setThreshold(uint88 threshold) public payable virtual {
-        Settings storage set = _settings[msg.sender];
-        if (
-            threshold
-                > (
-                    set.std == TokenStandard.DAGON
-                        ? totalSupply(uint256(uint160(msg.sender)))
-                        : set.std == TokenStandard.ERC20 || set.std == TokenStandard.ERC721
-                            ? set.tkn.totalSupply()
-                            : set.tkn.totalSupply(uint256(uint160(msg.sender)))
-                ) || threshold == 0
-        ) revert InvalidSetting();
-        emit ThresholdSet(msg.sender, (set.threshold = threshold));
-    }
-
-    /// @dev Sets new token ownership standard for the caller account.
-    function setToken(ITokenOwner tkn, TokenStandard std) public payable virtual {
-        emit TokenSet(msg.sender, _settings[msg.sender].tkn = tkn, _settings[msg.sender].std = std);
-    }
-
     /// ====================== TOKEN OPERATIONS ====================== ///
 
     /// @dev Mints shares for an owner of the caller account.
@@ -350,17 +285,72 @@ contract Dagon is ERC6909 {
         _burn(owner, id, shares);
     }
 
+    /// ===================== OWNERSHIP SETTINGS ===================== ///
+
+    /// @dev Returns the account settings.
+    function getSettings(address account)
+        public
+        view
+        virtual
+        returns (ITokenOwner, uint88, TokenStandard)
+    {
+        Settings storage set = _settings[account];
+        return (set.tkn, set.threshold, set.std);
+    }
+
+    /// @dev Returns the account metadata.
+    function getMetadata(address account)
+        public
+        view
+        virtual
+        returns (string memory, string memory, string memory, IAuth)
+    {
+        Metadata storage meta = _metadata[uint256(uint160(account))];
+        return (meta.name, meta.symbol, meta.tokenURI, meta.authority);
+    }
+
+    /// @dev Sets new authority contract for the caller account.
+    function setAuth(IAuth auth) public payable virtual {
+        emit AuthSet(msg.sender, (_metadata[uint256(uint160(msg.sender))].authority = auth));
+    }
+
+    /// @dev Sets new ownership threshold for the caller account.
+    function setThreshold(uint88 threshold) public payable virtual {
+        Settings storage set = _settings[msg.sender];
+        if (
+            threshold
+                > (
+                    set.std == TokenStandard.DAGON
+                        ? totalSupply(uint256(uint160(msg.sender)))
+                        : set.std == TokenStandard.ERC20 || set.std == TokenStandard.ERC721
+                            ? set.tkn.totalSupply()
+                            : set.tkn.totalSupply(uint256(uint160(msg.sender)))
+                ) || threshold == 0
+        ) revert InvalidSetting();
+        emit ThresholdSet(msg.sender, (set.threshold = threshold));
+    }
+
+    /// @dev Sets new token ownership interface standard for the caller account.
+    function setToken(ITokenOwner tkn, TokenStandard std) public payable virtual {
+        emit TokenSet(msg.sender, _settings[msg.sender].tkn = tkn, _settings[msg.sender].std = std);
+    }
+
+    /// @dev Sets new token URI metadata for the caller account.
+    function setURI(string calldata uri) public payable virtual {
+        emit URISet(msg.sender, (_metadata[uint256(uint160(msg.sender))].tokenURI = uri));
+    }
+
     /// ========================= OVERRIDES ========================= ///
 
     /// @dev Hook that is called before any transfer of tokens.
-    /// This includes minting and burning. Requests authority for the token transfer.
+    /// This includes minting and burning. Also requests authority for token transfers.
     function _beforeTokenTransfer(address from, address to, uint256 id, uint256 amount)
         internal
         virtual
         override(ERC6909)
     {
         IAuth auth = _metadata[id].authority;
-        if (auth != IAuth(address(0))) auth.canTransfer(from, to, id, amount);
+        if (auth != IAuth(address(0))) auth.validateTransfer(from, to, id, amount);
     }
 }
 
@@ -371,8 +361,14 @@ interface IOwnable {
 
 /// @notice Simple authority interface for contracts.
 interface IAuth {
-    function canTransfer(address, address, uint256, uint256) external payable;
-    function canCall(address, address, uint256, bytes calldata) external payable;
+    function validateTransfer(address, address, uint256, uint256)
+        external
+        payable
+        returns (uint256);
+    function validateCall(address, address, uint256, bytes calldata)
+        external
+        payable
+        returns (uint256);
 }
 
 /// @notice Generalized fungible token ownership interface.
