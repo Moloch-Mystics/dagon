@@ -5,8 +5,9 @@ pragma solidity ^0.8.19;
 import {ERC6909} from "@solady/src/tokens/ERC6909.sol";
 import {SignatureCheckerLib} from "@solady/src/utils/SignatureCheckerLib.sol";
 
-/// @notice Simple ownership singleton for smart accounts. DAO-agnostic.
-/// @dev Support for ERC-173, ERC-1271 and ERC-4337 is recommended for users.
+/// @notice Simple ownership singleton for smart accounts.
+/// @dev Integration is best by means of the ERC173 and ERC1271 methods.
+/// @custom:version 0.0.0
 contract Dagon is ERC6909 {
     /// ======================= CUSTOM ERRORS ======================= ///
 
@@ -25,7 +26,7 @@ contract Dagon is ERC6909 {
     event ThresholdSet(address indexed account, uint88 threshold);
 
     /// @dev Logs new token ownership standard for an account.
-    event TokenSet(address indexed account, ITokenOwner tkn, TokenStandard std);
+    event TokenSet(address indexed account, address token, Standard standard);
 
     /// ========================== STRUCTS ========================== ///
 
@@ -46,9 +47,9 @@ contract Dagon is ERC6909 {
 
     /// @dev The account ownership settings struct.
     struct Settings {
-        ITokenOwner tkn;
+        address token;
         uint88 threshold;
-        TokenStandard std;
+        Standard standard;
     }
 
     /// @dev The ERC4337 user operation (userOp) struct.
@@ -69,7 +70,7 @@ contract Dagon is ERC6909 {
     /// =========================== ENUMS =========================== ///
 
     /// @dev The token standard interface enum.
-    enum TokenStandard {
+    enum Standard {
         DAGON,
         ERC20,
         ERC721,
@@ -137,40 +138,29 @@ contract Dagon is ERC6909 {
                 address prev;
                 address owner;
                 uint256 tally;
-                // Check if the owners' signature is valid:
                 for (uint256 i; i != signature.length / 85; ++i) {
                     if (
                         SignatureCheckerLib.isValidSignatureNow(
                             owner = address(bytes20(signature[pos:pos + 20])),
                             hash,
                             signature[pos + 20:pos + 85]
-                        ) && prev < owner
+                        ) && prev < owner // Check double voting.
                     ) {
                         pos += 85;
                         prev = owner;
-                        tally += set.std == TokenStandard.DAGON
+                        tally += set.standard == Standard.DAGON
                             ? balanceOf(owner, uint256(uint160(msg.sender)))
-                            : set.std == TokenStandard.ERC20 || set.std == TokenStandard.ERC721
-                                ? set.tkn.balanceOf(owner)
-                                : set.tkn.balanceOf(owner, uint256(uint160(msg.sender)));
+                            : set.standard == Standard.ERC20 || set.standard == Standard.ERC721
+                                ? _balanceOf(set.token, owner)
+                                : _balanceOf(set.token, owner, uint256(uint160(msg.sender)));
                     } else {
                         return 0xffffffff; // Failure code.
                     }
                 }
-                // Check if the ownership tally has been met:
-                if (tally >= set.threshold) {
-                    return this.isValidSignature.selector;
-                } else {
-                    return 0xffffffff; // Failure code.
-                }
-            }
-        } else {
-            if (votingTally[hash] >= set.threshold) {
-                return this.isValidSignature.selector;
-            } else {
-                return 0xffffffff; // Failure code.
+                return _validateReturn(tally >= set.threshold);
             }
         }
+        return _validateReturn(votingTally[hash] >= set.threshold);
     }
 
     /// @dev Validates ERC4337 userOp with additional auth logic flow among owners.
@@ -193,6 +183,14 @@ contract Dagon is ERC6909 {
         ) validationData = 0x01; // Failure code.
     }
 
+    /// @dev Returns validated signature result within the conventional ERC1271 syntax.
+    function _validateReturn(bool success) internal pure virtual returns (bytes4 result) {
+        assembly {
+            // `success ? bytes4(keccak256("isValidSignature(bytes32,bytes)")) : 0xffffffff`.
+            result := shl(224, or(0x1626ba7e, sub(0, iszero(success))))
+        }
+    }
+
     /// ===================== VOTING OPERATIONS ===================== ///
 
     /// @dev Casts account owner voting shares on a given ERC4337 userOp hash.
@@ -202,13 +200,12 @@ contract Dagon is ERC6909 {
         virtual
         returns (uint256)
     {
-        bytes32 hash = SignatureCheckerLib.toEthSignedMessageHash(userOpHash);
         Settings memory set = _settings[account];
+        bytes32 hash = SignatureCheckerLib.toEthSignedMessageHash(userOpHash);
         unchecked {
             uint256 pos;
             address owner;
             uint256 tally;
-            // Check if the owners' signature is valid:
             for (uint256 i; i != signature.length / 85; ++i) {
                 if (
                     SignatureCheckerLib.isValidSignatureNow(
@@ -218,14 +215,14 @@ contract Dagon is ERC6909 {
                     ) && voted[owner][hash] == 0 // Check double voting.
                 ) {
                     pos += 85;
-                    tally += voted[owner][hash] = set.std == TokenStandard.DAGON
+                    tally += voted[owner][hash] = set.standard == Standard.DAGON
                         ? balanceOf(owner, uint256(uint160(account)))
-                        : set.std == TokenStandard.ERC20 || set.std == TokenStandard.ERC721
-                            ? set.tkn.balanceOf(owner)
-                            : set.tkn.balanceOf(owner, uint256(uint160(account)));
+                        : set.standard == Standard.ERC20 || set.standard == Standard.ERC721
+                            ? _balanceOf(set.token, owner)
+                            : _balanceOf(set.token, owner, uint256(uint160(account)));
                 }
             }
-            return votingTally[hash] += tally;
+            return votingTally[hash] += tally; // Return latest total tally.
         }
     }
 
@@ -250,17 +247,15 @@ contract Dagon is ERC6909 {
                     ++i;
                 }
             }
-            unchecked {
-                _metadata[id].totalSupply += supply;
-            }
+            _metadata[id].totalSupply += supply;
         }
-        setToken(setting.tkn, setting.std);
         setThreshold(setting.threshold);
-        if (bytes(meta.tokenURI).length != 0) setURI(meta.tokenURI);
+        setToken(setting.token, setting.standard);
         if (bytes(meta.name).length != 0) {
             _metadata[id].name = meta.name;
             _metadata[id].symbol = meta.symbol;
         }
+        if (bytes(meta.tokenURI).length != 0) setURI(meta.tokenURI);
         if (meta.authority != IAuth(address(0))) _metadata[id].authority = meta.authority;
         IOwnable(msg.sender).requestOwnershipHandover();
     }
@@ -288,14 +283,9 @@ contract Dagon is ERC6909 {
     /// ===================== OWNERSHIP SETTINGS ===================== ///
 
     /// @dev Returns the account settings.
-    function getSettings(address account)
-        public
-        view
-        virtual
-        returns (ITokenOwner, uint88, TokenStandard)
-    {
+    function getSettings(address account) public view virtual returns (address, uint88, Standard) {
         Settings storage set = _settings[account];
-        return (set.tkn, set.threshold, set.std);
+        return (set.token, set.threshold, set.standard);
     }
 
     /// @dev Returns the account metadata.
@@ -320,24 +310,82 @@ contract Dagon is ERC6909 {
         if (
             threshold
                 > (
-                    set.std == TokenStandard.DAGON
+                    set.standard == Standard.DAGON
                         ? totalSupply(uint256(uint160(msg.sender)))
-                        : set.std == TokenStandard.ERC20 || set.std == TokenStandard.ERC721
-                            ? set.tkn.totalSupply()
-                            : set.tkn.totalSupply(uint256(uint160(msg.sender)))
+                        : set.standard == Standard.ERC20 || set.standard == Standard.ERC721
+                            ? _totalSupply(set.token)
+                            : _totalSupply(set.token, uint256(uint160(msg.sender)))
                 ) || threshold == 0
         ) revert InvalidSetting();
         emit ThresholdSet(msg.sender, (set.threshold = threshold));
     }
 
     /// @dev Sets new token ownership interface standard for the caller account.
-    function setToken(ITokenOwner tkn, TokenStandard std) public payable virtual {
-        emit TokenSet(msg.sender, _settings[msg.sender].tkn = tkn, _settings[msg.sender].std = std);
+    function setToken(address token, Standard standard) public payable virtual {
+        emit TokenSet(
+            msg.sender,
+            _settings[msg.sender].token = token,
+            _settings[msg.sender].standard = standard
+        );
     }
 
     /// @dev Sets new token URI metadata for the caller account.
     function setURI(string calldata uri) public payable virtual {
         emit URISet(msg.sender, (_metadata[uint256(uint160(msg.sender))].tokenURI = uri));
+    }
+
+    /// ======================= TOKEN HELPERS ======================= ///
+
+    /// @dev Returns the amount of ERC20/721 `token` owned by `account`.
+    function _balanceOf(address token, address account)
+        internal
+        view
+        virtual
+        returns (uint256 amount)
+    {
+        assembly ("memory-safe") {
+            mstore(0x14, account) // Store the `account` argument.
+            mstore(0x00, 0x70a08231000000000000000000000000) // `balanceOf(address)`.
+            pop(staticcall(gas(), token, 0x10, 0x24, 0x00, 0x20))
+            amount := mload(0x00)
+        }
+    }
+
+    /// @dev Returns the amount of ERC1155/6909 `token` `id` owned by `account`.
+    function _balanceOf(address token, address account, uint256 id)
+        internal
+        view
+        virtual
+        returns (uint256 amount)
+    {
+        assembly ("memory-safe") {
+            mstore(0x04, account) // Store the `account` argument.
+            mstore(0x18, id) // Store the `id` argument.
+            mstore(0x00, 0x00fdd58e) // `balanceOf(address,uint256)`.
+            amount := mload(staticcall(gas(), token, 0x00, 0x38, 0x00, 0x20))
+        }
+    }
+
+    /// @dev Returns the total supply of ERC20/721 `token`.
+    function _totalSupply(address token) internal view virtual returns (uint256 supply) {
+        assembly ("memory-safe") {
+            mstore(0x00, 0x72dd529b) // `totalSupply()`.
+            supply := mload(staticcall(gas(), token, 0x00, 0x04, 0x00, 0x20))
+        }
+    }
+
+    /// @dev Returns the total supply of ERC1155/6909 `token` `id`.
+    function _totalSupply(address token, uint256 id)
+        internal
+        view
+        virtual
+        returns (uint256 supply)
+    {
+        assembly ("memory-safe") {
+            mstore(0x04, id) // Store the `id` argument.
+            mstore(0x00, 0x3f053e2d) // `totalSupply(uint256)`.
+            supply := mload(staticcall(gas(), token, 0x00, 0x24, 0x00, 0x20))
+        }
     }
 
     /// ========================= OVERRIDES ========================= ///
@@ -354,11 +402,6 @@ contract Dagon is ERC6909 {
     }
 }
 
-/// @notice Simple ownership interface for handover requests.
-interface IOwnable {
-    function requestOwnershipHandover() external payable;
-}
-
 /// @notice Simple authority interface for contracts.
 interface IAuth {
     function validateTransfer(address, address, uint256, uint256)
@@ -371,10 +414,7 @@ interface IAuth {
         returns (uint256);
 }
 
-/// @notice Generalized fungible token ownership interface.
-interface ITokenOwner {
-    function balanceOf(address) external view returns (uint256);
-    function balanceOf(address, uint256) external view returns (uint256);
-    function totalSupply() external view returns (uint256);
-    function totalSupply(uint256) external view returns (uint256);
+/// @notice Simple ownership interface for handover requests.
+interface IOwnable {
+    function requestOwnershipHandover() external payable;
 }

@@ -2,79 +2,16 @@
 pragma solidity ^0.8.19;
 
 import "@forge/Test.sol";
+
 import "@solady/test/utils/mocks/MockERC20.sol";
 import "@solady/test/utils/mocks/MockERC721.sol";
 import "@solady/test/utils/mocks/MockERC1155.sol";
 import "@solady/test/utils/mocks/MockERC6909.sol";
+
 import {LibClone} from "@solady/src/utils/LibClone.sol";
-
 import {Account as NaniAccount} from "@nani/Account.sol";
-import {ITokenOwner, IAuth, Dagon} from "../src/Dagon.sol";
 
-contract MockERC721TotalSupply is MockERC721 {
-    uint256 public totalSupply;
-
-    constructor() payable {}
-
-    function mint(address to, uint256 id) public virtual override(MockERC721) {
-        _mint(to, id);
-
-        unchecked {
-            ++totalSupply;
-        }
-    }
-}
-
-contract MockERC1155TotalSupply is MockERC1155 {
-    mapping(uint256 => uint256) public totalSupply;
-
-    constructor() payable {}
-
-    function mint(address to, uint256 id, uint256 amount, bytes memory)
-        public
-        virtual
-        override(MockERC1155)
-    {
-        _mint(to, id, amount, "");
-
-        totalSupply[id] += amount;
-    }
-}
-
-contract MockERC6909TotalSupply is MockERC6909 {
-    mapping(uint256 => uint256) public totalSupply;
-
-    constructor() payable {}
-
-    function mint(address to, uint256 id, uint256 amount)
-        public
-        payable
-        virtual
-        override(MockERC6909)
-    {
-        _mint(to, id, amount);
-
-        totalSupply[id] += amount;
-    }
-}
-
-contract MockAuth {
-    function validateTransfer(address, address, uint256, uint256)
-        public
-        payable
-        returns (uint256)
-    {
-        return 0;
-    }
-
-    function validateCall(address, address, uint256, bytes calldata)
-        public
-        payable
-        returns (uint256)
-    {
-        return 0;
-    }
-}
+import {IAuth, Dagon} from "../src/Dagon.sol";
 
 contract DagonTest is Test {
     address internal alice;
@@ -163,8 +100,8 @@ contract DagonTest is Test {
         _owners[0].shares = 1;
 
         Dagon.Settings memory setting;
-        setting.tkn = ITokenOwner(address(0));
-        setting.std = Dagon.TokenStandard.DAGON;
+        setting.token = address(0);
+        setting.standard = Dagon.Standard.DAGON;
         setting.threshold = 1;
 
         Dagon.Metadata memory meta;
@@ -177,7 +114,7 @@ contract DagonTest is Test {
         account.execute(
             address(owners),
             0,
-            abi.encodeWithSelector(owners.install.selector, _owners, setting, meta)
+            abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
 
         assertEq(account.ownershipHandoverExpiresAt(address(owners)), block.timestamp + 2 days);
@@ -190,12 +127,12 @@ contract DagonTest is Test {
             abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(owners))
         );
 
-        (ITokenOwner setTkn, uint88 setThreshold, Dagon.TokenStandard setStd) =
+        (address setTkn, uint88 setThreshold, Dagon.Standard setStd) =
             owners.getSettings(address(account));
 
-        assertEq(address(setTkn), address(setting.tkn));
+        assertEq(address(setTkn), address(setting.token));
         assertEq(uint256(setThreshold), uint256(setting.threshold));
-        assertEq(uint8(setStd), uint8(setting.std));
+        assertEq(uint8(setStd), uint8(setting.standard));
 
         assertEq(owners.tokenURI(accountId), "");
         (,,, IAuth authority) = owners.getMetadata(address(account));
@@ -241,25 +178,25 @@ contract DagonTest is Test {
         assertEq(owners.tokenURI(accountId), "TEST");
     }
 
-    function testSetToken(ITokenOwner tkn) public {
-        Dagon.TokenStandard std = Dagon.TokenStandard.DAGON;
+    function testSetToken(address tkn) public {
+        Dagon.Standard std = Dagon.Standard.DAGON;
         testInstall();
         vm.prank(address(account));
         owners.setToken(tkn, std);
-        (ITokenOwner setTkn,, Dagon.TokenStandard setStd) = owners.getSettings(address(account));
+        (address setTkn,, Dagon.Standard setStd) = owners.getSettings(address(account));
         assertEq(address(tkn), address(setTkn));
         assertEq(uint8(std), uint8(setStd));
-        std = Dagon.TokenStandard.ERC20;
+        std = Dagon.Standard.ERC20;
         vm.prank(address(account));
         owners.setToken(tkn, std);
         (setTkn,, setStd) = owners.getSettings(address(account));
         assertEq(address(tkn), address(setTkn));
     }
 
-    function testFailSetTokenInvalidStd(ITokenOwner tkn) public {
+    function testFailSetTokenInvalidStd(address tkn) public {
         testInstall();
         vm.prank(address(account));
-        owners.setToken(tkn, Dagon.TokenStandard(uint8(5)));
+        owners.setToken(tkn, Dagon.Standard(uint8(5)));
     }
 
     function testSetAuth(IAuth auth) public {
@@ -272,7 +209,8 @@ contract DagonTest is Test {
 
     function testTransfer(address from, address to, uint96 amount) public {
         vm.assume(from != alice && to != alice);
-        vm.assume(to != address(0) && to != address(0xff));
+        vm.assume(from != address(0) && to != address(0));
+        vm.assume(to != 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF);
         vm.assume(amount < type(uint96).max);
         testInstall();
         vm.prank(address(account));
@@ -402,8 +340,8 @@ contract DagonTest is Test {
         addrs[2] = chuck;
 
         Dagon.Settings memory setting;
-        setting.tkn = ITokenOwner(address(0));
-        setting.std = Dagon.TokenStandard.DAGON;
+        setting.token = address(0);
+        setting.standard = Dagon.Standard.DAGON;
         setting.threshold = 1;
 
         Dagon.Metadata memory meta;
@@ -416,7 +354,7 @@ contract DagonTest is Test {
         account.execute(
             address(owners),
             0,
-            abi.encodeWithSelector(owners.install.selector, _owners, setting, meta)
+            abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
 
         vm.prank(alice);
@@ -460,8 +398,8 @@ contract DagonTest is Test {
         addrs[2] = chuck;
 
         Dagon.Settings memory setting;
-        setting.tkn = ITokenOwner(address(0));
-        setting.std = Dagon.TokenStandard.DAGON;
+        setting.token = address(0);
+        setting.standard = Dagon.Standard.DAGON;
         setting.threshold = 1;
 
         Dagon.Metadata memory meta;
@@ -474,7 +412,7 @@ contract DagonTest is Test {
         account.execute(
             address(owners),
             0,
-            abi.encodeWithSelector(owners.install.selector, _owners, setting, meta)
+            abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
 
         vm.prank(alice);
@@ -516,8 +454,8 @@ contract DagonTest is Test {
         addrs[2] = chuck;
 
         Dagon.Settings memory setting;
-        setting.tkn = ITokenOwner(address(0));
-        setting.std = Dagon.TokenStandard.DAGON;
+        setting.token = address(0);
+        setting.standard = Dagon.Standard.DAGON;
         setting.threshold = 2;
 
         Dagon.Metadata memory meta;
@@ -530,7 +468,7 @@ contract DagonTest is Test {
         account.execute(
             address(owners),
             0,
-            abi.encodeWithSelector(owners.install.selector, _owners, setting, meta)
+            abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
 
         vm.prank(alice);
@@ -570,8 +508,8 @@ contract DagonTest is Test {
         addrs[3] = dave;
 
         Dagon.Settings memory setting;
-        setting.tkn = ITokenOwner(address(0));
-        setting.std = Dagon.TokenStandard.DAGON;
+        setting.token = address(0);
+        setting.standard = Dagon.Standard.DAGON;
         setting.threshold = 40;
 
         Dagon.Metadata memory meta;
@@ -584,7 +522,7 @@ contract DagonTest is Test {
         account.execute(
             address(owners),
             0,
-            abi.encodeWithSelector(owners.install.selector, _owners, setting, meta)
+            abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
 
         vm.prank(alice);
@@ -631,8 +569,8 @@ contract DagonTest is Test {
         addrs[3] = dave;
 
         Dagon.Settings memory setting;
-        setting.tkn = ITokenOwner(address(0));
-        setting.std = Dagon.TokenStandard.DAGON;
+        setting.token = address(0);
+        setting.standard = Dagon.Standard.DAGON;
         setting.threshold = 40;
 
         Dagon.Metadata memory meta;
@@ -645,7 +583,7 @@ contract DagonTest is Test {
         account.execute(
             address(owners),
             0,
-            abi.encodeWithSelector(owners.install.selector, _owners, setting, meta)
+            abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
 
         vm.prank(alice);
@@ -685,8 +623,8 @@ contract DagonTest is Test {
         addrs[3] = dave;
 
         Dagon.Settings memory setting;
-        setting.tkn = ITokenOwner(erc20);
-        setting.std = Dagon.TokenStandard.ERC20;
+        setting.token = erc20;
+        setting.standard = Dagon.Standard.ERC20;
         setting.threshold = 40;
 
         Dagon.Metadata memory meta;
@@ -699,7 +637,7 @@ contract DagonTest is Test {
         account.execute(
             address(owners),
             0,
-            abi.encodeWithSelector(owners.install.selector, _owners, setting, meta)
+            abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
 
         vm.prank(alice);
@@ -746,8 +684,8 @@ contract DagonTest is Test {
         addrs[3] = dave;
 
         Dagon.Settings memory setting;
-        setting.tkn = ITokenOwner(erc20);
-        setting.std = Dagon.TokenStandard.ERC20;
+        setting.token = erc20;
+        setting.standard = Dagon.Standard.ERC20;
         setting.threshold = 40;
 
         Dagon.Metadata memory meta;
@@ -760,7 +698,7 @@ contract DagonTest is Test {
         account.execute(
             address(owners),
             0,
-            abi.encodeWithSelector(owners.install.selector, _owners, setting, meta)
+            abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
 
         vm.prank(alice);
@@ -797,8 +735,8 @@ contract DagonTest is Test {
         addrs[2] = chuck;
 
         Dagon.Settings memory setting;
-        setting.tkn = ITokenOwner(erc721);
-        setting.std = Dagon.TokenStandard.ERC721;
+        setting.token = erc721;
+        setting.standard = Dagon.Standard.ERC721;
         setting.threshold = 2;
 
         Dagon.Metadata memory meta;
@@ -811,7 +749,7 @@ contract DagonTest is Test {
         account.execute(
             address(owners),
             0,
-            abi.encodeWithSelector(owners.install.selector, _owners, setting, meta)
+            abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
 
         vm.prank(alice);
@@ -853,8 +791,8 @@ contract DagonTest is Test {
         addrs[2] = chuck;
 
         Dagon.Settings memory setting;
-        setting.tkn = ITokenOwner(erc721);
-        setting.std = Dagon.TokenStandard.ERC721;
+        setting.token = erc721;
+        setting.standard = Dagon.Standard.ERC721;
         setting.threshold = 2;
 
         Dagon.Metadata memory meta;
@@ -867,7 +805,7 @@ contract DagonTest is Test {
         account.execute(
             address(owners),
             0,
-            abi.encodeWithSelector(owners.install.selector, _owners, setting, meta)
+            abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
 
         vm.prank(alice);
@@ -907,8 +845,8 @@ contract DagonTest is Test {
         addrs[3] = dave;
 
         Dagon.Settings memory setting;
-        setting.tkn = ITokenOwner(erc1155);
-        setting.std = Dagon.TokenStandard.ERC1155;
+        setting.token = erc1155;
+        setting.standard = Dagon.Standard.ERC1155;
         setting.threshold = 40;
 
         Dagon.Metadata memory meta;
@@ -921,7 +859,7 @@ contract DagonTest is Test {
         account.execute(
             address(owners),
             0,
-            abi.encodeWithSelector(owners.install.selector, _owners, setting, meta)
+            abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
 
         vm.prank(alice);
@@ -968,8 +906,8 @@ contract DagonTest is Test {
         addrs[3] = dave;
 
         Dagon.Settings memory setting;
-        setting.tkn = ITokenOwner(erc1155);
-        setting.std = Dagon.TokenStandard.ERC1155;
+        setting.token = erc1155;
+        setting.standard = Dagon.Standard.ERC1155;
         setting.threshold = 40;
 
         Dagon.Metadata memory meta;
@@ -980,7 +918,7 @@ contract DagonTest is Test {
 
         vm.prank(alice);
         account.execute(
-            address(owners), 0, abi.encodeWithSelector(owners.install.selector, setting, meta)
+            address(owners), 0, abi.encodeWithSelector(Dagon.install.selector, setting, meta)
         );
 
         vm.prank(alice);
@@ -1020,8 +958,8 @@ contract DagonTest is Test {
         addrs[3] = dave;
 
         Dagon.Settings memory setting;
-        setting.tkn = ITokenOwner(erc6909);
-        setting.std = Dagon.TokenStandard.ERC6909;
+        setting.token = erc6909;
+        setting.standard = Dagon.Standard.ERC6909;
         setting.threshold = 40;
 
         Dagon.Metadata memory meta;
@@ -1034,7 +972,7 @@ contract DagonTest is Test {
         account.execute(
             address(owners),
             0,
-            abi.encodeWithSelector(owners.install.selector, _owners, setting, meta)
+            abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
 
         vm.prank(alice);
@@ -1081,8 +1019,8 @@ contract DagonTest is Test {
         addrs[3] = dave;
 
         Dagon.Settings memory setting;
-        setting.tkn = ITokenOwner(erc6909);
-        setting.std = Dagon.TokenStandard.ERC6909;
+        setting.token = erc6909;
+        setting.standard = Dagon.Standard.ERC6909;
         setting.threshold = 40;
 
         Dagon.Metadata memory meta;
@@ -1095,7 +1033,7 @@ contract DagonTest is Test {
         account.execute(
             address(owners),
             0,
-            abi.encodeWithSelector(owners.install.selector, _owners, setting, meta)
+            abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
 
         vm.prank(alice);
@@ -1133,8 +1071,8 @@ contract DagonTest is Test {
         addrs[3] = dave;
 
         Dagon.Settings memory setting;
-        setting.tkn = ITokenOwner(address(0));
-        setting.std = Dagon.TokenStandard.DAGON;
+        setting.token = address(0);
+        setting.standard = Dagon.Standard.DAGON;
         setting.threshold = 40;
 
         Dagon.Metadata memory meta;
@@ -1147,7 +1085,7 @@ contract DagonTest is Test {
         account.execute(
             address(owners),
             0,
-            abi.encodeWithSelector(owners.install.selector, _owners, setting, meta)
+            abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
 
         vm.prank(alice);
@@ -1205,5 +1143,70 @@ contract DagonTest is Test {
             }
         }
         return addresses;
+    }
+}
+
+contract MockERC721TotalSupply is MockERC721 {
+    uint256 public totalSupply;
+
+    constructor() payable {}
+
+    function mint(address to, uint256 id) public virtual override(MockERC721) {
+        _mint(to, id);
+
+        unchecked {
+            ++totalSupply;
+        }
+    }
+}
+
+contract MockERC1155TotalSupply is MockERC1155 {
+    mapping(uint256 => uint256) public totalSupply;
+
+    constructor() payable {}
+
+    function mint(address to, uint256 id, uint256 amount, bytes memory)
+        public
+        virtual
+        override(MockERC1155)
+    {
+        _mint(to, id, amount, "");
+
+        totalSupply[id] += amount;
+    }
+}
+
+contract MockERC6909TotalSupply is MockERC6909 {
+    mapping(uint256 => uint256) public totalSupply;
+
+    constructor() payable {}
+
+    function mint(address to, uint256 id, uint256 amount)
+        public
+        payable
+        virtual
+        override(MockERC6909)
+    {
+        _mint(to, id, amount);
+
+        totalSupply[id] += amount;
+    }
+}
+
+contract MockAuth {
+    function validateTransfer(address, address, uint256, uint256)
+        public
+        payable
+        returns (uint256)
+    {
+        return 0;
+    }
+
+    function validateCall(address, address, uint256, bytes calldata)
+        public
+        payable
+        returns (uint256)
+    {
+        return 0;
     }
 }
