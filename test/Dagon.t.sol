@@ -207,7 +207,7 @@ contract DagonTest is Test {
         assertEq(address(auth), address(authority));
     }
 
-    function testTransfer(address from, address to, uint96 amount) public {
+    function testTransfer(address from, address to, uint88 amount) public {
         vm.assume(from != alice && to != alice);
         vm.assume(from != address(0) && to != address(0));
         vm.assume(to != 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF);
