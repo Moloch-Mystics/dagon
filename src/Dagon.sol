@@ -346,9 +346,7 @@ contract Dagon is ERC6909 {
         assembly ("memory-safe") {
             mstore(0x00, 0x70a08231000000000000000000000000) // `balanceOf(address)`.
             mstore(0x14, account) // Store the `account` argument.
-            if iszero(staticcall(gas(), token, 0x10, 0x24, 0x20, 0x20)) {
-                revert(codesize(), codesize()) // For gas estimation.
-            }
+            pop(staticcall(gas(), token, 0x10, 0x24, 0x20, 0x20))
             amount := mload(0x20)
         }
     }
@@ -364,9 +362,7 @@ contract Dagon is ERC6909 {
             mstore(0x00, 0x00fdd58e000000000000000000000000) // `balanceOf(address,uint256)`.
             mstore(0x14, account) // Store the `account` argument.
             mstore(0x34, id) // Store the `id` argument.
-            if iszero(staticcall(gas(), token, 0x10, 0x44, 0x20, 0x20)) {
-                revert(codesize(), codesize()) // For gas estimation.
-            }
+            pop(staticcall(gas(), token, 0x10, 0x44, 0x20, 0x20))
             amount := mload(0x20)
             mstore(0x34, 0)
         }
@@ -376,9 +372,7 @@ contract Dagon is ERC6909 {
     function _totalSupply(address token) internal view virtual returns (uint256 supply) {
         assembly ("memory-safe") {
             mstore(0x00, 0x18160ddd) // `totalSupply()`.
-            if iszero(staticcall(gas(), token, 0x1c, 0x04, 0x20, 0x20)) {
-                revert(codesize(), codesize()) // For gas estimation.
-            }
+            pop(staticcall(gas(), token, 0x1c, 0x04, 0x20, 0x20))
             supply := mload(0x20)
         }
     }
@@ -393,9 +387,7 @@ contract Dagon is ERC6909 {
         assembly ("memory-safe") {
             mstore(0x00, 0xbd85b039) // `totalSupply(uint256)`.
             mstore(0x20, id) // Store the `id` argument.
-            if iszero(staticcall(gas(), token, 0x1c, 0x24, 0x20, 0x20)) {
-                revert(codesize(), codesize()) // For gas estimation.
-            }
+            pop(staticcall(gas(), token, 0x1c, 0x24, 0x20, 0x20))
             supply := mload(0x20)
         }
     }
