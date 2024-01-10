@@ -386,7 +386,7 @@ contract Dagon is ERC6909 {
     {
         assembly ("memory-safe") {
             mstore(0x04, id) // Store the `id` argument.
-            mstore(0x00, 0x3f053e2d00000000000000000000000000000000000000000000000000000000) // `totalSupply(uint256)`.
+            mstore(0x00, 0x3f053e2d000000000000000000000000) // `totalSupply(uint256)`.
             if iszero(staticcall(gas(), token, 0x10, 0x24, 0x00, 0x20)) { revert(codesize(), 0x00) }
             supply := mload(0x00)
         }
