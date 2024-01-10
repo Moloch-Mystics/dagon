@@ -376,7 +376,7 @@ contract Dagon is ERC6909 {
     function _totalSupply(address token) internal view virtual returns (uint256 supply) {
         assembly ("memory-safe") {
             mstore(0x00, 0x18160ddd) // `totalSupply()`.
-            if iszero(staticcall(gas(), token, 0x1c, 0x04, 0x20, 0x20)) {
+            if iszero(staticcall(gas(), token, 0x04, 0x04, 0x20, 0x20)) {
                 revert(codesize(), codesize()) // For gas estimation.
             }
             supply := mload(0x20)
