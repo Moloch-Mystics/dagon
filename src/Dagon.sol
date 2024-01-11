@@ -226,42 +226,6 @@ contract Dagon is ERC6909 {
         }
     }
 
-    /// ====================== TOKEN OPERATIONS ====================== ///
-
-    /// @dev Returns the account metadata.
-    function getMetadata(address account)
-        public
-        view
-        virtual
-        returns (string memory, string memory, string memory, IAuth)
-    {
-        Metadata storage meta = _metadata[uint256(uint160(account))];
-        return (meta.name, meta.symbol, meta.tokenURI, meta.authority);
-    }
-
-    /// @dev Mints shares for an owner of the caller account.
-    function mint(address owner, uint96 shares) public payable virtual {
-        uint256 id = uint256(uint160(msg.sender));
-        _metadata[id].totalSupply += shares;
-        _mint(owner, id, shares);
-    }
-
-    /// @dev Burns shares from an owner of the caller account.
-    function burn(address owner, uint96 shares) public payable virtual {
-        uint256 id = uint256(uint160(msg.sender));
-        unchecked {
-            if (_settings[msg.sender].threshold > (_metadata[id].totalSupply -= shares)) {
-                revert InvalidSetting();
-            }
-        }
-        _burn(owner, id, shares);
-    }
-
-    /// @dev Sets new token URI metadata for the caller account.
-    function setURI(string calldata uri) public payable virtual {
-        emit URISet(msg.sender, (_metadata[uint256(uint160(msg.sender))].tokenURI = uri));
-    }
-
     /// ======================== INSTALLATION ======================== ///
 
     /// @dev Initializes ownership settings for the caller account.
@@ -277,23 +241,23 @@ contract Dagon is ERC6909 {
         if (owners.length != 0) {
             uint96 supply;
             for (uint256 i; i != owners.length;) {
-                _mint(owners[i].owner, id, owners[i].shares);
                 supply += owners[i].shares;
+                _mint(owners[i].owner, id, owners[i].shares);
                 unchecked {
                     ++i;
                 }
             }
             _metadata[id].totalSupply += supply;
         }
-        setThreshold(setting.threshold);
         setToken(setting.token, setting.standard);
+        setThreshold(setting.threshold);
         if (bytes(meta.name).length != 0) {
             _metadata[id].name = meta.name;
             _metadata[id].symbol = meta.symbol;
         }
         if (bytes(meta.tokenURI).length != 0) setURI(meta.tokenURI);
         if (meta.authority != IAuth(address(0))) _metadata[id].authority = meta.authority;
-        IOwnable(msg.sender).requestOwnershipHandover();
+        try IOwnable(msg.sender).requestOwnershipHandover() {} catch {} // Avoid revert.
     }
 
     /// ===================== OWNERSHIP SETTINGS ===================== ///
@@ -334,6 +298,42 @@ contract Dagon is ERC6909 {
         emit ThresholdSet(msg.sender, (set.threshold = threshold));
     }
 
+    /// ====================== TOKEN OPERATIONS ====================== ///
+
+    /// @dev Returns the account metadata.
+    function getMetadata(address account)
+        public
+        view
+        virtual
+        returns (string memory, string memory, string memory, IAuth)
+    {
+        Metadata storage meta = _metadata[uint256(uint160(account))];
+        return (meta.name, meta.symbol, meta.tokenURI, meta.authority);
+    }
+
+    /// @dev Mints shares for an owner of the caller account.
+    function mint(address owner, uint96 shares) public payable virtual {
+        uint256 id = uint256(uint160(msg.sender));
+        _metadata[id].totalSupply += shares;
+        _mint(owner, id, shares);
+    }
+
+    /// @dev Burns shares from an owner of the caller account.
+    function burn(address owner, uint96 shares) public payable virtual {
+        uint256 id = uint256(uint160(msg.sender));
+        unchecked {
+            if (_settings[msg.sender].threshold > (_metadata[id].totalSupply -= shares)) {
+                revert InvalidSetting();
+            }
+        }
+        _burn(owner, id, shares);
+    }
+
+    /// @dev Sets new token URI metadata for the caller account.
+    function setURI(string calldata uri) public payable virtual {
+        emit URISet(msg.sender, (_metadata[uint256(uint160(msg.sender))].tokenURI = uri));
+    }
+
     /// =================== EXTERNAL TOKEN HELPERS =================== ///
 
     /// @dev Returns the amount of ERC20/721 `token` owned by `account`.
@@ -364,7 +364,7 @@ contract Dagon is ERC6909 {
             mstore(0x34, id) // Store the `id` argument.
             pop(staticcall(gas(), token, 0x10, 0x44, 0x20, 0x20))
             amount := mload(0x20)
-            mstore(0x34, 0)
+            mstore(0x34, 0) // Restore the part of the free memory pointer that was overwritten.
         }
     }
 
