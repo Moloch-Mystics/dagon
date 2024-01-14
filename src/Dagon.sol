@@ -208,7 +208,7 @@ contract Dagon is ERC6909 {
             uint256 tally;
             for (uint256 i; i != signature.length / 85; ++i) {
                 if (
-                    SignatureCheckerLib.isValidSignatureNow(
+                    SignatureCheckerLib.isValidSignatureNowCalldata(
                         owner = address(bytes20(signature[pos:pos + 20])),
                         hash,
                         signature[pos + 20:pos + 85]
