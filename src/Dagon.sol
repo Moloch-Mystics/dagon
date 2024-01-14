@@ -1,6 +1,6 @@
 // ᗪᗩGOᑎ 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.23;
 
 import {ERC6909} from "@solady/src/tokens/ERC6909.sol";
 import {SignatureCheckerLib} from "@solady/src/utils/SignatureCheckerLib.sol";
@@ -140,7 +140,7 @@ contract Dagon is ERC6909 {
                 uint256 tally;
                 for (uint256 i; i != signature.length / 85; ++i) {
                     if (
-                        SignatureCheckerLib.isValidSignatureNow(
+                        SignatureCheckerLib.isValidSignatureNowCalldata(
                             owner = address(bytes20(signature[pos:pos + 20])),
                             hash,
                             signature[pos + 20:pos + 85]
