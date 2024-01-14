@@ -185,7 +185,7 @@ contract Dagon is ERC6909 {
 
     /// @dev Returns validated signature result within the conventional ERC1271 syntax.
     function _validateReturn(bool success) internal pure virtual returns (bytes4 result) {
-        assembly {
+        assembly ("memory-safe") {
             // `success ? bytes4(keccak256("isValidSignature(bytes32,bytes)")) : 0xffffffff`.
             result := shl(224, or(0x1626ba7e, sub(0, iszero(success))))
         }
