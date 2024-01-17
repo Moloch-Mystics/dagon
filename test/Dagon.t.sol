@@ -324,6 +324,24 @@ contract DagonTest is Test {
         assertEq(validationData, 0x00);
     }
 
+    function testUserVoted() public {
+        testInstall();
+        bytes32 userOpHash = keccak256("OWN");
+        NaniAccount.UserOperation memory userOp;
+        userOp.signature = "";
+        require(userOp.signature.length == 0, "INVALID_LEN");
+        userOp.sender = address(account);
+
+        bytes memory signature =
+            abi.encodePacked(alice, _sign(alicePk, _toEthSignedMessageHash(userOpHash)));
+
+        owners.vote(address(account), userOpHash, signature);
+        assertEq(
+            owners.voted(alice, _toEthSignedMessageHash(userOpHash)),
+            owners.balanceOf(alice, uint256(uint160(address(account))))
+        );
+    }
+
     // In 2-of-3, 3 signed.
     function testIsValidSignature3of3() public payable {
         Dagon.Ownership[] memory _owners = new Dagon.Ownership[](3);
