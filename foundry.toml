@@ -18,3 +18,4 @@ line_length = 100
 
 [rpc_endpoints]
 main = "https://rpc.ankr.com/eth"
+opti = "https://rpc.ankr.com/optimism"
