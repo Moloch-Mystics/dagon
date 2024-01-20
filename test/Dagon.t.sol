@@ -22,6 +22,50 @@ contract DagonTest is Test {
     uint256 internal chuckPk;
     address internal dave;
     uint256 internal davePk;
+    address internal ed;
+    uint256 internal edPk;
+    address internal fargo;
+    uint256 internal fargoPk;
+    address internal gravy;
+    uint256 internal gravyPk;
+    address internal holly;
+    uint256 internal hollyPk;
+    address internal ignis;
+    uint256 internal ignisPk;
+    address internal jake;
+    uint256 internal jakePk;
+    address internal kate;
+    uint256 internal katePk;
+    address internal leo;
+    uint256 internal leoPk;
+    address internal mia;
+    uint256 internal miaPk;
+    address internal nora;
+    uint256 internal noraPk;
+    address internal oscar;
+    uint256 internal oscarPk;
+    address internal piper;
+    uint256 internal piperPk;
+    address internal quinn;
+    uint256 internal quinnPk;
+    address internal rick;
+    uint256 internal rickPk;
+    address internal sara;
+    uint256 internal saraPk;
+    address internal tina;
+    uint256 internal tinaPk;
+    address internal uma;
+    uint256 internal umaPk;
+    address internal vince;
+    uint256 internal vincePk;
+    address internal wendy;
+    uint256 internal wendyPk;
+    address internal xander;
+    uint256 internal xanderPk;
+    address internal yasmine;
+    uint256 internal yasminePk;
+    address internal zane;
+    uint256 internal zanePk;
 
     mapping(address => uint256) internal keys;
 
@@ -47,6 +91,50 @@ contract DagonTest is Test {
         keys[chuck] = chuckPk;
         (dave, davePk) = makeAddrAndKey("dave");
         keys[dave] = davePk;
+        (ed, edPk) = makeAddrAndKey("ed");
+        keys[ed] = edPk;
+        (fargo, fargoPk) = makeAddrAndKey("fargo");
+        keys[fargo] = fargoPk;
+        (gravy, gravyPk) = makeAddrAndKey("gravy");
+        keys[gravy] = gravyPk;
+        (holly, hollyPk) = makeAddrAndKey("holly");
+        keys[holly] = hollyPk;
+        (ignis, ignisPk) = makeAddrAndKey("ignis");
+        keys[ignis] = ignisPk;
+        (jake, jakePk) = makeAddrAndKey("jake");
+        keys[jake] = jakePk;
+        (kate, katePk) = makeAddrAndKey("kate");
+        keys[kate] = katePk;
+        (leo, leoPk) = makeAddrAndKey("leo");
+        keys[leo] = leoPk;
+        (mia, miaPk) = makeAddrAndKey("mia");
+        keys[mia] = miaPk;
+        (nora, noraPk) = makeAddrAndKey("nora");
+        keys[nora] = noraPk;
+        (oscar, oscarPk) = makeAddrAndKey("oscar");
+        keys[oscar] = oscarPk;
+        (piper, piperPk) = makeAddrAndKey("piper");
+        keys[piper] = piperPk;
+        (quinn, quinnPk) = makeAddrAndKey("quinn");
+        keys[quinn] = quinnPk;
+        (rick, rickPk) = makeAddrAndKey("rick");
+        keys[rick] = rickPk;
+        (sara, saraPk) = makeAddrAndKey("sara");
+        keys[sara] = saraPk;
+        (tina, tinaPk) = makeAddrAndKey("tina");
+        keys[tina] = tinaPk;
+        (uma, umaPk) = makeAddrAndKey("uma");
+        keys[uma] = umaPk;
+        (vince, vincePk) = makeAddrAndKey("vince");
+        keys[vince] = vincePk;
+        (wendy, wendyPk) = makeAddrAndKey("wendy");
+        keys[wendy] = wendyPk;
+        (xander, xanderPk) = makeAddrAndKey("xander");
+        keys[xander] = xanderPk;
+        (yasmine, yasminePk) = makeAddrAndKey("yasmine");
+        keys[yasmine] = yasminePk;
+        (zane, zanePk) = makeAddrAndKey("zane");
+        keys[zane] = zanePk;
 
         // Etch something onto `_ENTRY_POINT` such that we can deploy the account implementation.
         vm.etch(_ENTRY_POINT, hex"00");
@@ -451,6 +539,226 @@ contract DagonTest is Test {
             _sign(_getPkByAddr(addrs[1]), signHash)
         );
 
+        vm.prank(_ENTRY_POINT);
+        uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
+        assertEq(validationData, 0x00);
+    }
+
+    function testIsValidSignatureMany() public payable {
+        Dagon.Ownership[] memory _owners = new Dagon.Ownership[](9);
+        _owners[0].owner = alice;
+        _owners[0].shares = 1;
+        _owners[1].owner = bob;
+        _owners[1].shares = 1;
+        _owners[2].owner = chuck;
+        _owners[2].shares = 1;
+        _owners[3].owner = dave;
+        _owners[3].shares = 1;
+        _owners[4].owner = ed;
+        _owners[4].shares = 1;
+        _owners[5].owner = fargo;
+        _owners[5].shares = 1;
+        _owners[6].owner = gravy;
+        _owners[6].shares = 1;
+        _owners[7].owner = holly;
+        _owners[7].shares = 1;
+        _owners[8].owner = ignis;
+        _owners[8].shares = 1;
+
+        address[] memory addrs = new address[](9);
+        addrs[0] = alice;
+        addrs[1] = bob;
+        addrs[2] = chuck;
+        addrs[3] = dave;
+        addrs[4] = ed;
+        addrs[5] = fargo;
+        addrs[6] = gravy;
+        addrs[7] = holly;
+        addrs[8] = ignis;
+
+        Dagon.Settings memory setting;
+        setting.token = address(0);
+        setting.standard = Dagon.Standard.DAGON;
+        setting.threshold = 1;
+
+        Dagon.Metadata memory meta;
+        meta.name = "";
+        meta.symbol = "";
+        meta.tokenURI = "";
+        meta.authority = IAuth(address(0));
+
+        vm.prank(alice);
+        account.execute(
+            address(owners),
+            0,
+            abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
+        );
+
+        vm.prank(alice);
+        account.execute(
+            address(account),
+            0,
+            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(owners))
+        );
+
+        NaniAccount.UserOperation memory userOp;
+        bytes32 userOpHash = keccak256("OWN");
+        bytes32 signHash = _toEthSignedMessageHash(userOpHash);
+        addrs = _sortAddresses(addrs);
+        userOp.signature = abi.encodePacked(
+            addrs[0],
+            _sign(_getPkByAddr(addrs[0]), signHash),
+            addrs[1],
+            _sign(_getPkByAddr(addrs[1]), signHash),
+            addrs[2],
+            _sign(_getPkByAddr(addrs[2]), signHash),
+            addrs[3],
+            _sign(_getPkByAddr(addrs[3]), signHash),
+            addrs[4],
+            _sign(_getPkByAddr(addrs[4]), signHash),
+            addrs[5],
+            _sign(_getPkByAddr(addrs[5]), signHash),
+            addrs[6],
+            _sign(_getPkByAddr(addrs[6]), signHash),
+            addrs[7],
+            _sign(_getPkByAddr(addrs[7]), signHash),
+            addrs[8],
+            _sign(_getPkByAddr(addrs[8]), signHash)
+        );
+
+        vm.prank(_ENTRY_POINT);
+        uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
+        assertEq(validationData, 0x00);
+    }
+
+    function testIsValidSignatureVeryMany() public payable {
+        // Declare the array of ownership structures
+        Dagon.Ownership[] memory _owners = new Dagon.Ownership[](26);
+        address[] memory addrs = new address[](26);
+
+        // Initialize the _owners array and the addrs array
+        _owners[0].owner = alice;
+        addrs[0] = alice;
+        _owners[0].shares = 1;
+        _owners[1].owner = bob;
+        addrs[1] = bob;
+        _owners[1].shares = 1;
+        _owners[2].owner = chuck;
+        addrs[2] = chuck;
+        _owners[2].shares = 1;
+        _owners[3].owner = dave;
+        addrs[3] = dave;
+        _owners[3].shares = 1;
+        _owners[4].owner = ed;
+        addrs[4] = ed;
+        _owners[4].shares = 1;
+        _owners[5].owner = fargo;
+        addrs[5] = fargo;
+        _owners[5].shares = 1;
+        _owners[6].owner = gravy;
+        addrs[6] = gravy;
+        _owners[6].shares = 1;
+        _owners[7].owner = holly;
+        addrs[7] = holly;
+        _owners[7].shares = 1;
+        _owners[8].owner = ignis;
+        addrs[8] = ignis;
+        _owners[8].shares = 1;
+        _owners[9].owner = jake;
+        addrs[9] = jake;
+        _owners[9].shares = 1;
+        _owners[10].owner = kate;
+        addrs[10] = kate;
+        _owners[10].shares = 1;
+        _owners[11].owner = leo;
+        addrs[11] = leo;
+        _owners[11].shares = 1;
+        _owners[12].owner = mia;
+        addrs[12] = mia;
+        _owners[12].shares = 1;
+        _owners[13].owner = nora;
+        addrs[13] = nora;
+        _owners[13].shares = 1;
+        _owners[14].owner = oscar;
+        addrs[14] = oscar;
+        _owners[14].shares = 1;
+        _owners[15].owner = piper;
+        addrs[15] = piper;
+        _owners[15].shares = 1;
+        _owners[16].owner = quinn;
+        addrs[16] = quinn;
+        _owners[16].shares = 1;
+        _owners[17].owner = rick;
+        addrs[17] = rick;
+        _owners[17].shares = 1;
+        _owners[18].owner = sara;
+        addrs[18] = sara;
+        _owners[18].shares = 1;
+        _owners[19].owner = tina;
+        addrs[19] = tina;
+        _owners[19].shares = 1;
+        _owners[20].owner = uma;
+        addrs[20] = uma;
+        _owners[20].shares = 1;
+        _owners[21].owner = vince;
+        addrs[21] = vince;
+        _owners[21].shares = 1;
+        _owners[22].owner = wendy;
+        addrs[22] = wendy;
+        _owners[22].shares = 1;
+        _owners[23].owner = xander;
+        addrs[23] = xander;
+        _owners[23].shares = 1;
+        _owners[24].owner = yasmine;
+        addrs[24] = yasmine;
+        _owners[24].shares = 1;
+        _owners[25].owner = zane;
+        addrs[25] = zane;
+        _owners[25].shares = 1;
+
+        // Setup the Dagon settings and metadata
+        Dagon.Settings memory setting;
+        setting.token = address(0);
+        setting.standard = Dagon.Standard.DAGON;
+        setting.threshold = 1;
+
+        Dagon.Metadata memory meta;
+        meta.name = "";
+        meta.symbol = "";
+        meta.tokenURI = "";
+        meta.authority = IAuth(address(0));
+
+        // Execute the Dagon install
+        vm.prank(alice);
+        account.execute(
+            address(owners),
+            0,
+            abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
+        );
+
+        // Complete ownership handover
+        vm.prank(alice);
+        account.execute(
+            address(account),
+            0,
+            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(owners))
+        );
+
+        // Prepare for the signature validation
+        NaniAccount.UserOperation memory userOp;
+        bytes32 userOpHash = keccak256("OWN");
+        bytes32 signHash = _toEthSignedMessageHash(userOpHash);
+
+        // Sort the addresses and prepare the signature
+        addrs = _sortAddresses(addrs);
+        userOp.signature = "";
+        for (uint256 i = 0; i < addrs.length; i++) {
+            userOp.signature = abi.encodePacked(
+                userOp.signature, addrs[i], _sign(_getPkByAddr(addrs[i]), signHash)
+            );
+        }
+
+        // Validate the user operation
         vm.prank(_ENTRY_POINT);
         uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
         assertEq(validationData, 0x00);
