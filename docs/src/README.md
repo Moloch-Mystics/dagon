@@ -5,6 +5,13 @@
 
 Built with *[Foundry](https://github.com/foundry-rs/forge-std)* and *[Solady](https://github.com/vectorized/solady)*.
 
+## Alpha Deployment
+> *Signature Validation Limit: ~1774 signatures*
+
+Chain           | Address                                 | 
+----------------|-----------------------------------------|
+Ethereum, Optimism, Sepolia (testnet) | [0x0000000000001D4B1320bB3c47380a3D1C3A1A0C](https://etherscan.io/address/0x0000000000001D4B1320bB3c47380a3D1C3A1A0C#code) |
+
 ## Premise
 
 Dagon is a contract singleton system that allows any account to give any token a threshold right to sign for it. It thus supports existing token communities and DAO deployments out-of-the-gate. Dagon is optimized especially for most off-chain voting methods, such as multisig and weighted snapshot proposals, as well, initially offers a platform-agnostic upgrade path into smart account-based governance abstraction following, *e.g.*, [ERC-4337](https://eips.ethereum.org/EIPS/eip-4337).
