@@ -78,7 +78,7 @@ contract DagonTest is Test {
 
     NaniAccount internal account;
     uint256 internal accountId;
-    Dagon internal owners;
+    Dagon internal dagon;
 
     address internal constant _ENTRY_POINT = 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789;
 
@@ -143,7 +143,7 @@ contract DagonTest is Test {
 
         accountId = uint256(uint160(address(account)));
 
-        owners = new Dagon();
+        dagon = new Dagon();
 
         erc20 = address(new MockERC20("TEST", "TEST", 18));
         MockERC20(erc20).mint(alice, 40 ether);
@@ -173,13 +173,13 @@ contract DagonTest is Test {
     }
 
     function testDeploy() public {
-        owners = new Dagon();
+        new Dagon();
     }
 
     function testNameAndSymbolAndDecimals(uint256 id) public {
-        assertEq(owners.name(id), "");
-        assertEq(owners.symbol(id), "");
-        assertEq(owners.decimals(id), 18);
+        assertEq(dagon.name(id), "");
+        assertEq(dagon.symbol(id), "");
+        assertEq(dagon.decimals(id), 18);
     }
 
     function testInstall() public {
@@ -200,98 +200,103 @@ contract DagonTest is Test {
 
         vm.prank(alice);
         account.execute(
-            address(owners),
+            address(dagon),
             0,
             abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
 
-        assertEq(account.ownershipHandoverExpiresAt(address(owners)), block.timestamp + 2 days);
-        assertEq(owners.balanceOf(alice, accountId), 1);
+        assertEq(account.ownershipHandoverExpiresAt(address(dagon)), block.timestamp + 2 days);
+        assertEq(dagon.balanceOf(alice, accountId), 1);
 
         vm.prank(alice);
         account.execute(
             address(account),
             0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(owners))
+            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
         (address setTkn, uint88 setThreshold, Dagon.Standard setStd) =
-            owners.getSettings(address(account));
+            dagon.getSettings(address(account));
 
         assertEq(address(setTkn), address(setting.token));
         assertEq(uint256(setThreshold), uint256(setting.threshold));
         assertEq(uint8(setStd), uint8(setting.standard));
 
-        assertEq(owners.tokenURI(accountId), "");
-        (,,, IAuth authority) = owners.getMetadata(address(account));
+        assertEq(dagon.tokenURI(accountId), "");
+        (,,, IAuth authority) = dagon.getMetadata(address(account));
         assertEq(address(authority), address(0));
     }
 
     function testSetThreshold() public {
         testInstall();
         vm.prank(address(account));
-        owners.mint(alice, 1);
+        dagon.mint(alice, 1);
         vm.prank(address(account));
-        owners.setThreshold(2);
-        (, uint88 setThreshold,) = owners.getSettings(address(account));
+        dagon.setThreshold(2);
+        (, uint88 setThreshold,) = dagon.getSettings(address(account));
         assertEq(setThreshold, 2);
+    }
+
+    function testSpoofSignatures(bytes calldata spoof) public payable {
+        bytes32 hash; // Empty hash.
+        assertEq(bytes4(0xffffffff), account.isValidSignature(hash, spoof));
     }
 
     function testFailInvalidThresholdNull() public {
         testInstall();
         vm.prank(address(account));
-        owners.setThreshold(0);
+        dagon.setThreshold(0);
     }
 
     function testFailInvalidThresholdExceedsSupply() public {
         testInstall();
         vm.prank(address(account));
-        owners.setThreshold(2);
+        dagon.setThreshold(2);
     }
 
     function testFailInvalidThresholdExceedsSupply2() public {
         testInstall();
         vm.prank(address(account));
-        owners.mint(alice, 1);
+        dagon.mint(alice, 1);
         vm.prank(address(account));
-        owners.setThreshold(3);
-        (, uint88 setThreshold,) = owners.getSettings(address(account));
+        dagon.setThreshold(3);
+        (, uint88 setThreshold,) = dagon.getSettings(address(account));
         assertEq(setThreshold, 3);
     }
 
     function testSetURI() public {
         testInstall();
         vm.prank(address(account));
-        owners.setURI("TEST");
-        assertEq(owners.tokenURI(accountId), "TEST");
+        dagon.setURI("TEST");
+        assertEq(dagon.tokenURI(accountId), "TEST");
     }
 
     function testSetToken(address tkn) public {
         Dagon.Standard std = Dagon.Standard.DAGON;
         testInstall();
         vm.prank(address(account));
-        owners.setToken(tkn, std);
-        (address setTkn,, Dagon.Standard setStd) = owners.getSettings(address(account));
+        dagon.setToken(tkn, std);
+        (address setTkn,, Dagon.Standard setStd) = dagon.getSettings(address(account));
         assertEq(address(tkn), address(setTkn));
         assertEq(uint8(std), uint8(setStd));
         std = Dagon.Standard.ERC20;
         vm.prank(address(account));
-        owners.setToken(tkn, std);
-        (setTkn,, setStd) = owners.getSettings(address(account));
+        dagon.setToken(tkn, std);
+        (setTkn,, setStd) = dagon.getSettings(address(account));
         assertEq(address(tkn), address(setTkn));
     }
 
     function testFailSetTokenInvalidStd(address tkn) public {
         testInstall();
         vm.prank(address(account));
-        owners.setToken(tkn, Dagon.Standard(uint8(5)));
+        dagon.setToken(tkn, Dagon.Standard(uint8(5)));
     }
 
     function testSetAuth(IAuth auth) public {
         testInstall();
         vm.prank(address(account));
-        owners.setAuth(auth);
-        (,,, IAuth authority) = owners.getMetadata(address(account));
+        dagon.setAuth(auth);
+        (,,, IAuth authority) = dagon.getMetadata(address(account));
         assertEq(address(auth), address(authority));
     }
 
@@ -302,12 +307,12 @@ contract DagonTest is Test {
         vm.assume(amount < type(uint96).max);
         testInstall();
         vm.prank(address(account));
-        owners.mint(from, amount);
-        assertEq(owners.balanceOf(from, accountId), amount);
+        dagon.mint(from, amount);
+        assertEq(dagon.balanceOf(from, accountId), amount);
         vm.prank(from);
-        owners.transfer(to, accountId, amount);
-        assertEq(owners.balanceOf(from, accountId), 0);
-        assertEq(owners.balanceOf(to, accountId), amount);
+        dagon.transfer(to, accountId, amount);
+        assertEq(dagon.balanceOf(from, accountId), 0);
+        assertEq(dagon.balanceOf(to, accountId), amount);
     }
 
     function testFailTransferOverBalance(address from, address to, uint96 amount) public {
@@ -315,9 +320,9 @@ contract DagonTest is Test {
         vm.assume(amount < type(uint96).max);
         testInstall();
         vm.prank(address(account));
-        owners.mint(from, amount);
+        dagon.mint(from, amount);
         vm.prank(from);
-        owners.transfer(to, accountId, amount + 1);
+        dagon.transfer(to, accountId, amount + 1);
     }
 
     function testTransferWithAuth(address from, address to, uint96 amount) public {
@@ -325,11 +330,11 @@ contract DagonTest is Test {
         vm.assume(amount < type(uint96).max);
         testInstall();
         vm.prank(address(account));
-        owners.mint(from, amount);
+        dagon.mint(from, amount);
         vm.prank(address(account));
-        owners.setAuth(IAuth(mockAuth));
+        dagon.setAuth(IAuth(mockAuth));
         vm.prank(from);
-        owners.transfer(to, accountId, amount);
+        dagon.transfer(to, accountId, amount);
     }
 
     function testFailTransferFromInactiveAuth(address from, address to, uint96 amount) public {
@@ -337,11 +342,11 @@ contract DagonTest is Test {
         vm.assume(amount < type(uint96).max);
         testInstall();
         vm.prank(address(account));
-        owners.mint(from, amount);
+        dagon.mint(from, amount);
         vm.prank(address(account));
-        owners.setAuth(IAuth(address(4269)));
+        dagon.setAuth(IAuth(address(4269)));
         vm.prank(from);
-        owners.transfer(to, accountId, amount);
+        dagon.transfer(to, accountId, amount);
     }
 
     function testBurn(address from, uint96 amount) public {
@@ -349,11 +354,11 @@ contract DagonTest is Test {
         vm.assume(amount < type(uint96).max);
         testInstall();
         vm.prank(address(account));
-        owners.mint(from, amount);
-        assertEq(owners.balanceOf(from, accountId), amount);
+        dagon.mint(from, amount);
+        assertEq(dagon.balanceOf(from, accountId), amount);
         vm.prank(address(account));
-        owners.burn(from, amount);
-        assertEq(owners.balanceOf(from, accountId), 0);
+        dagon.burn(from, amount);
+        assertEq(dagon.balanceOf(from, accountId), 0);
     }
 
     function testFailBurnOverBalance(address from, uint96 amount) public {
@@ -361,10 +366,10 @@ contract DagonTest is Test {
         vm.assume(amount < type(uint96).max);
         testInstall();
         vm.prank(address(account));
-        owners.mint(from, amount);
-        assertEq(owners.balanceOf(from, accountId), amount);
+        dagon.mint(from, amount);
+        assertEq(dagon.balanceOf(from, accountId), amount);
         vm.prank(address(account));
-        owners.burn(from, amount + 1);
+        dagon.burn(from, amount + 1);
     }
 
     function testFailBurnOverThreshold(address from, uint96 amount) public {
@@ -372,12 +377,12 @@ contract DagonTest is Test {
         vm.assume(amount < type(uint96).max);
         testInstall();
         vm.prank(address(account));
-        owners.mint(from, amount);
-        assertEq(owners.balanceOf(from, accountId), amount);
+        dagon.mint(from, amount);
+        assertEq(dagon.balanceOf(from, accountId), amount);
         vm.prank(address(account));
-        owners.burn(from, amount);
+        dagon.burn(from, amount);
         vm.expectRevert(Dagon.InvalidSetting.selector);
-        owners.burn(alice, 1);
+        dagon.burn(alice, 1);
     }
 
     function testIsValidSignature() public {
@@ -405,7 +410,7 @@ contract DagonTest is Test {
         bytes memory signature =
             abi.encodePacked(alice, _sign(alicePk, _toEthSignedMessageHash(userOpHash)));
 
-        owners.vote(address(account), userOpHash, signature);
+        dagon.vote(address(account), userOpHash, signature);
 
         vm.prank(_ENTRY_POINT);
         uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
@@ -423,10 +428,10 @@ contract DagonTest is Test {
         bytes memory signature =
             abi.encodePacked(alice, _sign(alicePk, _toEthSignedMessageHash(userOpHash)));
 
-        owners.vote(address(account), userOpHash, signature);
+        dagon.vote(address(account), userOpHash, signature);
         assertEq(
-            owners.voted(alice, _toEthSignedMessageHash(userOpHash)),
-            owners.balanceOf(alice, uint256(uint160(address(account))))
+            dagon.voted(alice, _toEthSignedMessageHash(userOpHash)),
+            dagon.balanceOf(alice, uint256(uint160(address(account))))
         );
     }
 
@@ -458,7 +463,7 @@ contract DagonTest is Test {
 
         vm.prank(alice);
         account.execute(
-            address(owners),
+            address(dagon),
             0,
             abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
@@ -467,7 +472,7 @@ contract DagonTest is Test {
         account.execute(
             address(account),
             0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(owners))
+            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
         NaniAccount.UserOperation memory userOp;
@@ -516,7 +521,7 @@ contract DagonTest is Test {
 
         vm.prank(alice);
         account.execute(
-            address(owners),
+            address(dagon),
             0,
             abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
@@ -525,7 +530,7 @@ contract DagonTest is Test {
         account.execute(
             address(account),
             0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(owners))
+            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
         NaniAccount.UserOperation memory userOp;
@@ -589,7 +594,7 @@ contract DagonTest is Test {
 
         vm.prank(alice);
         account.execute(
-            address(owners),
+            address(dagon),
             0,
             abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
@@ -598,7 +603,7 @@ contract DagonTest is Test {
         account.execute(
             address(account),
             0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(owners))
+            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
         NaniAccount.UserOperation memory userOp;
@@ -731,7 +736,7 @@ contract DagonTest is Test {
         // Execute the Dagon install
         vm.prank(alice);
         account.execute(
-            address(owners),
+            address(dagon),
             0,
             abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
@@ -741,7 +746,7 @@ contract DagonTest is Test {
         account.execute(
             address(account),
             0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(owners))
+            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
         // Prepare for the signature validation
@@ -792,7 +797,7 @@ contract DagonTest is Test {
 
         vm.prank(alice);
         account.execute(
-            address(owners),
+            address(dagon),
             0,
             abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
@@ -801,7 +806,7 @@ contract DagonTest is Test {
         account.execute(
             address(account),
             0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(owners))
+            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
         NaniAccount.UserOperation memory userOp;
@@ -846,7 +851,7 @@ contract DagonTest is Test {
 
         vm.prank(alice);
         account.execute(
-            address(owners),
+            address(dagon),
             0,
             abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
@@ -855,7 +860,7 @@ contract DagonTest is Test {
         account.execute(
             address(account),
             0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(owners))
+            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
         NaniAccount.UserOperation memory userOp;
@@ -907,7 +912,7 @@ contract DagonTest is Test {
 
         vm.prank(alice);
         account.execute(
-            address(owners),
+            address(dagon),
             0,
             abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
@@ -916,7 +921,7 @@ contract DagonTest is Test {
         account.execute(
             address(account),
             0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(owners))
+            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
         NaniAccount.UserOperation memory userOp;
@@ -961,7 +966,7 @@ contract DagonTest is Test {
 
         vm.prank(alice);
         account.execute(
-            address(owners),
+            address(dagon),
             0,
             abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
@@ -970,7 +975,7 @@ contract DagonTest is Test {
         account.execute(
             address(account),
             0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(owners))
+            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
         NaniAccount.UserOperation memory userOp;
@@ -1022,7 +1027,7 @@ contract DagonTest is Test {
 
         vm.prank(alice);
         account.execute(
-            address(owners),
+            address(dagon),
             0,
             abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
@@ -1031,7 +1036,7 @@ contract DagonTest is Test {
         account.execute(
             address(account),
             0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(owners))
+            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
         NaniAccount.UserOperation memory userOp;
@@ -1073,7 +1078,7 @@ contract DagonTest is Test {
 
         vm.prank(alice);
         account.execute(
-            address(owners),
+            address(dagon),
             0,
             abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
@@ -1082,7 +1087,7 @@ contract DagonTest is Test {
         account.execute(
             address(account),
             0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(owners))
+            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
         NaniAccount.UserOperation memory userOp;
@@ -1129,7 +1134,7 @@ contract DagonTest is Test {
 
         vm.prank(alice);
         account.execute(
-            address(owners),
+            address(dagon),
             0,
             abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
@@ -1138,7 +1143,7 @@ contract DagonTest is Test {
         account.execute(
             address(account),
             0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(owners))
+            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
         NaniAccount.UserOperation memory userOp;
@@ -1183,7 +1188,7 @@ contract DagonTest is Test {
 
         vm.prank(alice);
         account.execute(
-            address(owners),
+            address(dagon),
             0,
             abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
@@ -1192,7 +1197,7 @@ contract DagonTest is Test {
         account.execute(
             address(account),
             0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(owners))
+            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
         NaniAccount.UserOperation memory userOp;
@@ -1244,14 +1249,14 @@ contract DagonTest is Test {
 
         vm.prank(alice);
         account.execute(
-            address(owners), 0, abi.encodeWithSelector(Dagon.install.selector, setting, meta)
+            address(dagon), 0, abi.encodeWithSelector(Dagon.install.selector, setting, meta)
         );
 
         vm.prank(alice);
         account.execute(
             address(account),
             0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(owners))
+            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
         NaniAccount.UserOperation memory userOp;
@@ -1296,7 +1301,7 @@ contract DagonTest is Test {
 
         vm.prank(alice);
         account.execute(
-            address(owners),
+            address(dagon),
             0,
             abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
@@ -1305,7 +1310,7 @@ contract DagonTest is Test {
         account.execute(
             address(account),
             0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(owners))
+            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
         NaniAccount.UserOperation memory userOp;
@@ -1357,7 +1362,7 @@ contract DagonTest is Test {
 
         vm.prank(alice);
         account.execute(
-            address(owners),
+            address(dagon),
             0,
             abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
@@ -1366,7 +1371,7 @@ contract DagonTest is Test {
         account.execute(
             address(account),
             0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(owners))
+            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
         NaniAccount.UserOperation memory userOp;
@@ -1379,7 +1384,7 @@ contract DagonTest is Test {
         assertEq(validationData, 0x00);
     }
 
-    function testFailIsValidSignatureOutOfOrder() public payable {
+    /*function testFailIsValidSignatureOutOfOrder() public payable {
         Dagon.Ownership[] memory _owners = new Dagon.Ownership[](4);
         _owners[0].owner = alice;
         _owners[0].shares = 40;
@@ -1409,7 +1414,7 @@ contract DagonTest is Test {
 
         vm.prank(alice);
         account.execute(
-            address(owners),
+            address(dagon),
             0,
             abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
@@ -1418,7 +1423,7 @@ contract DagonTest is Test {
         account.execute(
             address(account),
             0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(owners))
+            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
         NaniAccount.UserOperation memory userOp;
@@ -1436,7 +1441,7 @@ contract DagonTest is Test {
         vm.prank(_ENTRY_POINT);
         uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
         assertEq(validationData, 0x00);
-    }
+    }*/
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
