@@ -1,5 +1,5 @@
 # Summoner
-[Git Source](https://github.com/Moloch-Mystics/dagon/blob/65b43bfbebe7dc8176f84027fc17e3554a0b2583/src/Summoner.sol)
+[Git Source](https://github.com/Moloch-Mystics/dagon/blob/61631c322dd3fa7b753c15a6c86011e828ae4ba4/src/Summoner.sol)
 
 Simple summoner for Dagon (𒀭) group accounts.
 
@@ -24,7 +24,7 @@ IAccounts internal constant FACTORY = IAccounts(0x000000000000dD366cc2E4432bB998
 
 
 ```solidity
-function summon(address summoner, uint88 shares, bool locked, bytes12 salt)
+function summon(Ownership[] calldata summoners, uint88 threshold, bool locked, bytes12 salt)
     public
     payable
     returns (IAccounts account);
@@ -34,10 +34,20 @@ function summon(address summoner, uint88 shares, bool locked, bytes12 salt)
 
 
 ```solidity
-function summonForToken(address token, bool nft, uint88 threshold, bytes12 salt)
+function summonForToken(address token, Standard standard, uint88 threshold, bytes12 salt)
     public
     payable
     returns (IAccounts account);
+```
+
+## Structs
+### Ownership
+
+```solidity
+struct Ownership {
+    address owner;
+    uint96 shares;
+}
 ```
 
 ## Enums
