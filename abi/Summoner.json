@@ -1,0 +1,70 @@
+[
+    {
+      "type": "function",
+      "name": "summon",
+      "inputs": [
+        {
+          "name": "summoner",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "shares",
+          "type": "uint88",
+          "internalType": "uint88"
+        },
+        {
+          "name": "locked",
+          "type": "bool",
+          "internalType": "bool"
+        },
+        {
+          "name": "salt",
+          "type": "bytes12",
+          "internalType": "bytes12"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "internalType": "contract IAccounts"
+        }
+      ],
+      "stateMutability": "payable"
+    },
+    {
+      "type": "function",
+      "name": "summonForToken",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "nft",
+          "type": "bool",
+          "internalType": "bool"
+        },
+        {
+          "name": "threshold",
+          "type": "uint88",
+          "internalType": "uint88"
+        },
+        {
+          "name": "salt",
+          "type": "bytes12",
+          "internalType": "bytes12"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "internalType": "contract IAccounts"
+        }
+      ],
+      "stateMutability": "payable"
+    }
+  ]

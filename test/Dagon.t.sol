@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.23;
 
 import "@forge/Test.sol";
 
@@ -1384,7 +1384,7 @@ contract DagonTest is Test {
         assertEq(validationData, 0x00);
     }
 
-    /*function testFailIsValidSignatureOutOfOrder() public payable {
+    function testFailIsValidSignatureOutOfOrder() public payable {
         Dagon.Ownership[] memory _owners = new Dagon.Ownership[](4);
         _owners[0].owner = alice;
         _owners[0].shares = 40;
@@ -1441,7 +1441,7 @@ contract DagonTest is Test {
         vm.prank(_ENTRY_POINT);
         uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
         assertEq(validationData, 0x00);
-    }*/
+    }
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
