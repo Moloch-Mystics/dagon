@@ -1,5 +1,5 @@
 # Dagon
-[Git Source](https://github.com/Moloch-Mystics/dagon/blob/61631c322dd3fa7b753c15a6c86011e828ae4ba4/src/Dagon.sol)
+[Git Source](https://github.com/Moloch-Mystics/dagon/blob/3c50a9b175611229baf44017b0ba4f798e0515cb/src/Dagon.sol)
 
 **Inherits:**
 ERC6909

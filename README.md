@@ -12,6 +12,8 @@ Chain           | Address                                 |
 ----------------|-----------------------------------------|
 Ethereum, Optimism, Sepolia (testnet) | [0x0000000000001D4B1320bB3c47380a3D1C3A1A0C](https://etherscan.io/address/0x0000000000001D4B1320bB3c47380a3D1C3A1A0C#code) |
 
+🕯️ Summoner: [0xDDc31C0272a3c4696124C8df1bCf096090a168B4](https://optimistic.etherscan.io/address/0xddc31c0272a3c4696124c8df1bcf096090a168b4#code)
+
 ## Premise
 
 Dagon is a contract singleton system that allows any account to give any token a threshold right to sign for it. It thus supports existing token communities and DAO deployments out-of-the-gate. Dagon is optimized especially for most off-chain voting methods, such as multisig and weighted snapshot proposals, as well, initially offers a platform-agnostic upgrade path into smart account-based governance abstraction following, *e.g.*, [ERC-4337](https://eips.ethereum.org/EIPS/eip-4337).
