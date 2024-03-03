@@ -1,12 +1,10 @@
 # Dagon
-[Git Source](https://github.com/Moloch-Mystics/dagon/blob/3c50a9b175611229baf44017b0ba4f798e0515cb/src/Dagon.sol)
+[Git Source](https://github.com/Moloch-Mystics/dagon/blob/d1a46b5b5c5a2b934862fab00dc866a8f0b25f91/src/Dagon.sol)
 
 **Inherits:**
 ERC6909
 
-Simple ownership singleton for smart accounts.
-
-*Integration is best by means of the ERC173 and ERC1271 methods.*
+Simple ownership singleton for smart accounts. Version 1.
 
 
 ## State Variables
@@ -118,12 +116,12 @@ function isValidSignature(bytes32 hash, bytes calldata signature)
 
 ### validateUserOp
 
-*Validates ERC4337 userOp with additional auth logic flow among owners.
+*Validates packed userOp with additional auth logic flow among owners.
 note: This is expected to be called in a validator plugin-like userOp flow.*
 
 
 ```solidity
-function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256)
+function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash, uint256)
     public
     payable
     virtual
@@ -398,21 +396,19 @@ struct Settings {
 }
 ```
 
-### UserOperation
-*The ERC4337 user operation (userOp) struct.*
+### PackedUserOperation
+*The packed ERC4337 user operation (userOp) struct.*
 
 
 ```solidity
-struct UserOperation {
+struct PackedUserOperation {
     address sender;
     uint256 nonce;
     bytes initCode;
     bytes callData;
-    uint256 callGasLimit;
-    uint256 verificationGasLimit;
+    bytes32 accountGasLimits;
     uint256 preVerificationGas;
-    uint256 maxFeePerGas;
-    uint256 maxPriorityFeePerGas;
+    bytes32 gasFees;
     bytes paymasterAndData;
     bytes signature;
 }

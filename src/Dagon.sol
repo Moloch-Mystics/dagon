@@ -1,13 +1,11 @@
 // ᗪᗩGOᑎ 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.23;
+pragma solidity ^0.8.24;
 
 import {ERC6909} from "@solady/src/tokens/ERC6909.sol";
 import {SignatureCheckerLib} from "@solady/src/utils/SignatureCheckerLib.sol";
 
-/// @notice Simple ownership singleton for smart accounts.
-/// @dev Integration is best by means of the ERC173 and ERC1271 methods.
-/// @custom:version 0.0.0
+/// @notice Simple ownership singleton for smart accounts. Version 1.
 contract Dagon is ERC6909 {
     /// ======================= CUSTOM ERRORS ======================= ///
 
@@ -52,17 +50,15 @@ contract Dagon is ERC6909 {
         Standard standard;
     }
 
-    /// @dev The ERC4337 user operation (userOp) struct.
-    struct UserOperation {
+    /// @dev The packed ERC4337 user operation (userOp) struct.
+    struct PackedUserOperation {
         address sender;
         uint256 nonce;
         bytes initCode;
         bytes callData;
-        uint256 callGasLimit;
-        uint256 verificationGasLimit;
+        bytes32 accountGasLimits;
         uint256 preVerificationGas;
-        uint256 maxFeePerGas;
-        uint256 maxPriorityFeePerGas;
+        bytes32 gasFees; // `maxPriorityFee` and `maxFeePerGas`.
         bytes paymasterAndData;
         bytes signature;
     }
@@ -163,10 +159,10 @@ contract Dagon is ERC6909 {
         return _validateReturn(votingTally[hash] >= set.threshold);
     }
 
-    /// @dev Validates ERC4337 userOp with additional auth logic flow among owners.
+    /// @dev Validates packed userOp with additional auth logic flow among owners.
     /// note: This is expected to be called in a validator plugin-like userOp flow.
     function validateUserOp(
-        UserOperation calldata userOp,
+        PackedUserOperation calldata userOp,
         bytes32 userOpHash,
         uint256 /*missingAccountFunds*/
     ) public payable virtual returns (uint256 validationData) {

@@ -1,5 +1,5 @@
 # IOwnable
-[Git Source](https://github.com/Moloch-Mystics/dagon/blob/3c50a9b175611229baf44017b0ba4f798e0515cb/src/Dagon.sol)
+[Git Source](https://github.com/Moloch-Mystics/dagon/blob/d1a46b5b5c5a2b934862fab00dc866a8f0b25f91/src/Dagon.sol)
 
 Simple ownership interface for handover requests.
 
