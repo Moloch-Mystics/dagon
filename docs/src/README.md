@@ -5,20 +5,22 @@
 
 Built with *[Foundry](https://github.com/foundry-rs/forge-std)* and *[Solady](https://github.com/vectorized/solady)*.
 
-## Alpha Deployment
+## Beta Deployment
 > *Signature Validation Limit: ~1774 signatures*
 
 Chain           | Address                                 | 
 ----------------|-----------------------------------------|
-Ethereum, Optimism, Sepolia (testnet) | [0x0000000000001D4B1320bB3c47380a3D1C3A1A0C](https://etherscan.io/address/0x0000000000001D4B1320bB3c47380a3D1C3A1A0C#code) |
-
-🕯️ Summoner: [0xDDc31C0272a3c4696124C8df1bCf096090a168B4](https://optimistic.etherscan.io/address/0xddc31c0272a3c4696124c8df1bcf096090a168b4#code)
+Ethereum, Arbitrum, Optimism, Base, Blast, Zora, Polygon (& testnets) | [0x0000000000001ADDcB933DD5028159dc965b5b7f](https://etherscan.io/address/0x0000000000001ADDcB933DD5028159dc965b5b7f#code) |
 
 ## Premise
 
-Dagon is a contract singleton system that allows any account to give any token a threshold right to sign for it. It thus supports existing token communities and DAO deployments out-of-the-gate. Dagon is optimized especially for most off-chain voting methods, such as multisig and weighted snapshot proposals, as well, initially offers a platform-agnostic upgrade path into smart account-based governance abstraction following, *e.g.*, [ERC-4337](https://eips.ethereum.org/EIPS/eip-4337).
+Dagon is a contract singleton system that allows any smart contract account to give any token a threshold right to sign for it. This means you can add "more owners" to your smart account. It also means you can give these different owners different "weights" to simulate a DAO voting engine or company captable. Equal weights are equivalent to a multi-sig or coop. These weights can be associated with existing tokens or created within Dagon itself. The sky is the limit as long as [`ERC-173`](https://eips.ethereum.org/EIPS/eip-173) and [`ERC-1271`](https://eips.ethereum.org/EIPS/eip-1271) are followed.
 
-By just validating contract signatures remotely for accounts following [ERC-1271](https://eips.ethereum.org/EIPS/eip-1271), and not dealing with execution or more opinionated proposal logic, Dagon can complement more organizations today, as well as serve as a source of record for the greater DAO ecosystem, which are all free to implement their own custom hooks and checks to Dagon validation. In `V0`, which is focused as a voting engine, the Dagon pattern can be used for offchain polling for any token, including `ERC-20`, `ERC-721`, `ERC-1155`, `ERC-6909`, and includes a native token mint and burn function to allow tokens to upgrade (or new tokens to be issued) under `DAGON` (itself [`ERC-6909`](https://eips.ethereum.org/EIPS/eip-6909)), but can also validate onchain user operations (`userOp`s) that submit ownership to Dagon validation using the [`ERC-173`](https://eips.ethereum.org/EIPS/eip-173) `transferOwnership` flow.
+Dagon thus supports existing token communities and DAO deployments out-of-the-gate. This voting format is optimized especially for most off-chain voting methods, like snapshot proposals, as well, initially offers a platform-agnostic upgrade path into smart account-based governance abstraction following, *e.g.*, [`ERC-4337`](https://eips.ethereum.org/EIPS/eip-4337).
+
+## More specifically
+
+By just validating contract signatures remotely for accounts following `ERC-1271`, and not dealing with execution or more opinionated proposal logic, Dagon can complement more organizations today, as well as serve as a source of record for the greater DAO ecosystem, which are all free to implement their own custom hooks and checks to Dagon validation. In `V1`, which is focused as a voting engine, the Dagon pattern can be used for offchain polling for any token, including `ERC-20`, `ERC-721`, `ERC-1155`, `ERC-6909`, and includes a native token mint and burn function to allow tokens to upgrade (or new tokens to be issued) under `DAGON` (itself [`ERC-6909`](https://eips.ethereum.org/EIPS/eip-6909)), but can also validate onchain user operations (`userOp`s) that submit ownership to Dagon validation using the `ERC-173` `transferOwnership` flow.
 
 For example, DAOs might use Dagon singletons in small ways to start as an extension to their ordinary operating system and governor contracts, such as to prove the results of group polls and for simple dapp display purposes, but if Dagon is also registered as the owner of a group smart account (which could be earmarked or the full treasury), Dagon can then work as the DAO's proposal engine, validating userOps and letting them be posted onchain. In this mode, Dagon supports both token-weighted and m/n signature schemes. Collection of Dagon signatures is gasless, and can be posted in a single transaction through the Dagon `isValidSignature` function in response to a typical `ERC-4337` userOp flow.
 
