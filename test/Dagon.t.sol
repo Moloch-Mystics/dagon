@@ -388,7 +388,7 @@ contract DagonTest is Test {
     function testIsValidSignature() public {
         testInstall();
         bytes32 userOpHash = keccak256("OWN");
-        NaniAccount.UserOperation memory userOp;
+        NaniAccount.PackedUserOperation memory userOp;
         userOp.signature =
             abi.encodePacked(alice, _sign(alicePk, _toEthSignedMessageHash(userOpHash)));
         require(userOp.signature.length == 85, "INVALID_LEN");
@@ -402,7 +402,7 @@ contract DagonTest is Test {
     function testIsValidSignatureOnchain() public {
         testInstall();
         bytes32 userOpHash = keccak256("OWN");
-        NaniAccount.UserOperation memory userOp;
+        NaniAccount.PackedUserOperation memory userOp;
         userOp.signature = "";
         require(userOp.signature.length == 0, "INVALID_LEN");
         userOp.sender = address(account);
@@ -420,7 +420,7 @@ contract DagonTest is Test {
     function testUserVoted() public {
         testInstall();
         bytes32 userOpHash = keccak256("OWN");
-        NaniAccount.UserOperation memory userOp;
+        NaniAccount.PackedUserOperation memory userOp;
         userOp.signature = "";
         require(userOp.signature.length == 0, "INVALID_LEN");
         userOp.sender = address(account);
@@ -475,7 +475,7 @@ contract DagonTest is Test {
             abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
-        NaniAccount.UserOperation memory userOp;
+        NaniAccount.PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
         bytes32 signHash = _toEthSignedMessageHash(userOpHash);
         addrs = _sortAddresses(addrs);
@@ -533,7 +533,7 @@ contract DagonTest is Test {
             abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
-        NaniAccount.UserOperation memory userOp;
+        NaniAccount.PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
         bytes32 signHash = _toEthSignedMessageHash(userOpHash);
         addrs = _sortAddresses(addrs);
@@ -606,7 +606,7 @@ contract DagonTest is Test {
             abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
-        NaniAccount.UserOperation memory userOp;
+        NaniAccount.PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
         bytes32 signHash = _toEthSignedMessageHash(userOpHash);
         addrs = _sortAddresses(addrs);
@@ -750,7 +750,7 @@ contract DagonTest is Test {
         );
 
         // Prepare for the signature validation
-        NaniAccount.UserOperation memory userOp;
+        NaniAccount.PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
         bytes32 signHash = _toEthSignedMessageHash(userOpHash);
 
@@ -809,7 +809,7 @@ contract DagonTest is Test {
             abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
-        NaniAccount.UserOperation memory userOp;
+        NaniAccount.PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
         bytes32 signHash = _toEthSignedMessageHash(userOpHash);
         addrs = _sortAddresses(addrs);
@@ -863,7 +863,7 @@ contract DagonTest is Test {
             abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
-        NaniAccount.UserOperation memory userOp;
+        NaniAccount.PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
         bytes32 signHash = _toEthSignedMessageHash(userOpHash);
         addrs = _sortAddresses(addrs);
@@ -924,7 +924,7 @@ contract DagonTest is Test {
             abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
-        NaniAccount.UserOperation memory userOp;
+        NaniAccount.PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
         bytes32 signHash = _toEthSignedMessageHash(userOpHash);
         addrs = _sortAddresses(addrs);
@@ -978,7 +978,7 @@ contract DagonTest is Test {
             abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
-        NaniAccount.UserOperation memory userOp;
+        NaniAccount.PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
         bytes32 signHash = _toEthSignedMessageHash(userOpHash);
         addrs = _sortAddresses(addrs);
@@ -1039,7 +1039,7 @@ contract DagonTest is Test {
             abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
-        NaniAccount.UserOperation memory userOp;
+        NaniAccount.PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
         bytes32 signHash = _toEthSignedMessageHash(userOpHash);
         addrs = _sortAddresses(addrs);
@@ -1090,7 +1090,7 @@ contract DagonTest is Test {
             abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
-        NaniAccount.UserOperation memory userOp;
+        NaniAccount.PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
         bytes32 signHash = _toEthSignedMessageHash(userOpHash);
         addrs = _sortAddresses(addrs);
@@ -1146,7 +1146,7 @@ contract DagonTest is Test {
             abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
-        NaniAccount.UserOperation memory userOp;
+        NaniAccount.PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
         bytes32 signHash = _toEthSignedMessageHash(userOpHash);
         addrs = _sortAddresses(addrs);
@@ -1200,7 +1200,7 @@ contract DagonTest is Test {
             abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
-        NaniAccount.UserOperation memory userOp;
+        NaniAccount.PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
         bytes32 signHash = _toEthSignedMessageHash(userOpHash);
         addrs = _sortAddresses(addrs);
@@ -1259,7 +1259,7 @@ contract DagonTest is Test {
             abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
-        NaniAccount.UserOperation memory userOp;
+        NaniAccount.PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
         bytes32 signHash = _toEthSignedMessageHash(userOpHash);
         addrs = _sortAddresses(addrs);
@@ -1313,7 +1313,7 @@ contract DagonTest is Test {
             abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
-        NaniAccount.UserOperation memory userOp;
+        NaniAccount.PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
         bytes32 signHash = _toEthSignedMessageHash(userOpHash);
         addrs = _sortAddresses(addrs);
@@ -1374,7 +1374,7 @@ contract DagonTest is Test {
             abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
-        NaniAccount.UserOperation memory userOp;
+        NaniAccount.PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
         addrs = _sortAddresses(addrs);
         userOp.signature = abi.encodePacked("");
@@ -1426,7 +1426,7 @@ contract DagonTest is Test {
             abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
         );
 
-        NaniAccount.UserOperation memory userOp;
+        NaniAccount.PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
         bytes32 signHash = _toEthSignedMessageHash(userOpHash);
         userOp.signature = abi.encodePacked(
