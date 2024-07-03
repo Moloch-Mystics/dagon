@@ -1,11 +1,11 @@
 // ᗪᗩGOᑎ 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭 𒀭
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.24;
+pragma solidity 0.8.26;
 
 import {ERC6909} from "@solady/src/tokens/ERC6909.sol";
 import {SignatureCheckerLib} from "@solady/src/utils/SignatureCheckerLib.sol";
 
-/// @notice Simple ownership singleton for smart accounts. Version 1.
+/// @notice Simple ownership singleton for smart accounts. Version 1x.
 contract Dagon is ERC6909 {
     /// ======================= CUSTOM ERRORS ======================= ///
 
@@ -14,11 +14,11 @@ contract Dagon is ERC6909 {
 
     /// =========================== EVENTS =========================== ///
 
+    /// @dev Logs new metadata for an account ID.
+    event URI(string uri, uint256 indexed id);
+
     /// @dev Logs new authority contract for an account.
     event AuthSet(address indexed account, IAuth auth);
-
-    /// @dev Logs new token uri settings for an account.
-    event URISet(address indexed account, string uri);
 
     /// @dev Logs new ownership threshold for an account.
     event ThresholdSet(address indexed account, uint88 threshold);
@@ -43,6 +43,12 @@ contract Dagon is ERC6909 {
         uint96 shares;
     }
 
+    /// @dev The signature struct.
+    struct Signature {
+        address owner;
+        bytes sigData;
+    }
+
     /// @dev The account ownership settings struct.
     struct Settings {
         address token;
@@ -58,7 +64,7 @@ contract Dagon is ERC6909 {
         bytes callData;
         bytes32 accountGasLimits;
         uint256 preVerificationGas;
-        bytes32 gasFees; // `maxPriorityFee` and `maxFeePerGas`.
+        bytes32 gasFees;
         bytes paymasterAndData;
         bytes signature;
     }
@@ -83,11 +89,12 @@ contract Dagon is ERC6909 {
     /// @dev Stores mapping of ownership settings to accounts.
     mapping(address account => Settings) internal _settings;
 
-    /// @dev Stores mapping of voting tallies to signed userOp hashes.
-    mapping(bytes32 signedHash => uint256) public votingTally;
+    /// @dev Stores mapping of voting tallies to account operation hashes.
+    mapping(address account => mapping(bytes32 hash => uint256)) public votingTally;
 
-    /// @dev Stores mapping of account owner voting shares cast on signed userOp hashes.
-    mapping(address owner => mapping(bytes32 signedHash => uint256 shares)) public voted;
+    /// @dev Stores mapping of account owner shares cast on account operation hashes.
+    mapping(address account => mapping(address owner => mapping(bytes32 hash => uint256 shares)))
+        public voted;
 
     /// ================= ERC6909 METADATA & SUPPLY ================= ///
 
@@ -127,36 +134,33 @@ contract Dagon is ERC6909 {
         virtual
         returns (bytes4)
     {
-        Settings memory set = _settings[msg.sender];
+        Settings memory setting = _settings[msg.sender];
         if (signature.length != 0) {
             unchecked {
-                uint256 pos;
+                Signature[] memory signatures = abi.decode(signature, (Signature[]));
                 address prev;
                 address owner;
                 uint256 tally;
-                for (uint256 i; i != signature.length / 85; ++i) {
+                for (uint256 i; i != signatures.length; ++i) {
                     if (
-                        SignatureCheckerLib.isValidSignatureNowCalldata(
-                            owner = address(bytes20(signature[pos:pos + 20])),
-                            hash,
-                            signature[pos + 20:pos + 85]
+                        SignatureCheckerLib.isValidSignatureNow(
+                            owner = signatures[i].owner, hash, signatures[i].sigData
                         ) && prev < owner // Check double voting.
                     ) {
-                        pos += 85;
                         prev = owner;
-                        tally += set.standard == Standard.DAGON
+                        tally += setting.standard == Standard.DAGON
                             ? balanceOf(owner, uint256(uint160(msg.sender)))
-                            : set.standard == Standard.ERC20 || set.standard == Standard.ERC721
-                                ? _balanceOf(set.token, owner)
-                                : _balanceOf(set.token, owner, uint256(uint160(msg.sender)));
+                            : setting.standard == Standard.ERC20 || setting.standard == Standard.ERC721
+                                ? _balanceOf(setting.token, owner)
+                                : _balanceOf(setting.token, owner, uint256(uint160(msg.sender)));
                     } else {
                         return 0xffffffff; // Failure code.
                     }
                 }
-                return _validateReturn(tally >= set.threshold);
+                return _validateReturn(tally >= setting.threshold);
             }
         }
-        return _validateReturn(votingTally[hash] >= set.threshold);
+        return _validateReturn(votingTally[msg.sender][hash] >= setting.threshold);
     }
 
     /// @dev Validates packed userOp with additional auth logic flow among owners.
@@ -165,18 +169,16 @@ contract Dagon is ERC6909 {
         PackedUserOperation calldata userOp,
         bytes32 userOpHash,
         uint256 /*missingAccountFunds*/
-    ) public payable virtual returns (uint256 validationData) {
+    ) public virtual returns (uint256 validationData) {
         IAuth auth = _metadata[uint256(uint160(msg.sender))].authority;
         if (auth != IAuth(address(0))) {
             (address target, uint256 value, bytes memory data) =
                 abi.decode(userOp.callData[4:], (address, uint256, bytes));
             auth.validateCall(msg.sender, target, value, data);
         }
-        if (
-            isValidSignature(
-                SignatureCheckerLib.toEthSignedMessageHash(userOpHash), userOp.signature
-            ) != this.isValidSignature.selector
-        ) validationData = 0x01; // Failure code.
+        if (isValidSignature(userOpHash, userOp.signature) != this.isValidSignature.selector) {
+            validationData = 0x01; // Failure code.
+        }
     }
 
     /// @dev Returns validated signature result within the conventional ERC1271 syntax.
@@ -189,36 +191,45 @@ contract Dagon is ERC6909 {
 
     /// ===================== VOTING OPERATIONS ===================== ///
 
-    /// @dev Casts account owner voting shares on a given ERC4337 userOp hash.
-    function vote(address account, bytes32 userOpHash, bytes calldata signature)
+    /// @dev Casts account owners' voting shares on a given operation hash.
+    function vote(address account, bytes32 hash, bytes calldata signature)
         public
-        payable
         virtual
         returns (uint256)
     {
-        Settings memory set = _settings[account];
-        bytes32 hash = SignatureCheckerLib.toEthSignedMessageHash(userOpHash);
+        Signature[] memory signatures = abi.decode(signature, (Signature[]));
+        Settings memory setting = _settings[account];
         unchecked {
-            uint256 pos;
             address owner;
             uint256 tally;
-            for (uint256 i; i != signature.length / 85; ++i) {
+            for (uint256 i; i != signatures.length; ++i) {
                 if (
-                    SignatureCheckerLib.isValidSignatureNowCalldata(
-                        owner = address(bytes20(signature[pos:pos + 20])),
-                        hash,
-                        signature[pos + 20:pos + 85]
-                    ) && voted[owner][hash] == 0 // Check double voting.
+                    SignatureCheckerLib.isValidSignatureNow(
+                        owner = signatures[i].owner, hash, signatures[i].sigData
+                    ) && voted[account][owner][hash] == 0 // Check double voting.
                 ) {
-                    pos += 85;
-                    tally += voted[owner][hash] = set.standard == Standard.DAGON
+                    tally += voted[account][owner][hash] = setting.standard == Standard.DAGON
                         ? balanceOf(owner, uint256(uint160(account)))
-                        : set.standard == Standard.ERC20 || set.standard == Standard.ERC721
-                            ? _balanceOf(set.token, owner)
-                            : _balanceOf(set.token, owner, uint256(uint160(account)));
+                        : setting.standard == Standard.ERC20 || setting.standard == Standard.ERC721
+                            ? _balanceOf(setting.token, owner)
+                            : _balanceOf(setting.token, owner, uint256(uint160(account)));
                 }
             }
-            return votingTally[hash] += tally; // Return latest total tally.
+            return votingTally[account][hash] += tally; // Return latest total tally.
+        }
+    }
+
+    /// @dev Casts caller voting shares on a given operation hash and returns tally.
+    function vote(address account, bytes32 hash) public virtual returns (uint256) {
+        if (voted[account][msg.sender][hash] != 0) revert InsufficientPermission();
+        Settings storage setting = _settings[account];
+        unchecked {
+            return votingTally[account][hash] += voted[account][msg.sender][hash] = setting.standard
+                == Standard.DAGON
+                ? balanceOf(msg.sender, uint256(uint160(account)))
+                : setting.standard == Standard.ERC20 || setting.standard == Standard.ERC721
+                    ? _balanceOf(setting.token, msg.sender)
+                    : _balanceOf(setting.token, msg.sender, uint256(uint160(account)));
         }
     }
 
@@ -230,18 +241,14 @@ contract Dagon is ERC6909 {
     /// https://github.com/Vectorized/solady/blob/main/src/auth/Ownable.sol
     function install(Ownership[] calldata owners, Settings calldata setting, Metadata calldata meta)
         public
-        payable
         virtual
     {
         uint256 id = uint256(uint160(msg.sender));
         if (owners.length != 0) {
             uint96 supply;
-            for (uint256 i; i != owners.length;) {
+            for (uint256 i; i != owners.length; ++i) {
                 supply += owners[i].shares;
                 _mint(owners[i].owner, id, owners[i].shares);
-                unchecked {
-                    ++i;
-                }
             }
             _metadata[id].totalSupply += supply;
         }
@@ -252,7 +259,7 @@ contract Dagon is ERC6909 {
             _metadata[id].symbol = meta.symbol;
         }
         if (bytes(meta.tokenURI).length != 0) setURI(meta.tokenURI);
-        if (meta.authority != IAuth(address(0))) _metadata[id].authority = meta.authority;
+        if (meta.authority != IAuth(address(0))) setAuth(meta.authority);
         try IOwnable(msg.sender).requestOwnershipHandover() {} catch {} // Avoid revert.
     }
 
@@ -265,12 +272,12 @@ contract Dagon is ERC6909 {
     }
 
     /// @dev Sets new authority contract for the caller account.
-    function setAuth(IAuth auth) public payable virtual {
+    function setAuth(IAuth auth) public virtual {
         emit AuthSet(msg.sender, (_metadata[uint256(uint160(msg.sender))].authority = auth));
     }
 
     /// @dev Sets new token ownership interface standard for the caller account.
-    function setToken(address token, Standard standard) public payable virtual {
+    function setToken(address token, Standard standard) public virtual {
         emit TokenSet(
             msg.sender,
             _settings[msg.sender].token = token,
@@ -279,7 +286,7 @@ contract Dagon is ERC6909 {
     }
 
     /// @dev Sets new ownership threshold for the caller account.
-    function setThreshold(uint88 threshold) public payable virtual {
+    function setThreshold(uint88 threshold) public virtual {
         Settings storage set = _settings[msg.sender];
         if (
             threshold
@@ -308,14 +315,14 @@ contract Dagon is ERC6909 {
     }
 
     /// @dev Mints shares for an owner of the caller account.
-    function mint(address owner, uint96 shares) public payable virtual {
+    function mint(address owner, uint96 shares) public virtual {
         uint256 id = uint256(uint160(msg.sender));
         _metadata[id].totalSupply += shares;
         _mint(owner, id, shares);
     }
 
     /// @dev Burns shares from an owner of the caller account.
-    function burn(address owner, uint96 shares) public payable virtual {
+    function burn(address owner, uint96 shares) public virtual {
         uint256 id = uint256(uint160(msg.sender));
         unchecked {
             if (_settings[msg.sender].threshold > (_metadata[id].totalSupply -= shares)) {
@@ -326,8 +333,9 @@ contract Dagon is ERC6909 {
     }
 
     /// @dev Sets new token URI metadata for the caller account.
-    function setURI(string calldata uri) public payable virtual {
-        emit URISet(msg.sender, (_metadata[uint256(uint160(msg.sender))].tokenURI = uri));
+    function setURI(string calldata uri) public virtual {
+        uint256 id = uint256(uint160(msg.sender));
+        emit URI((_metadata[id].tokenURI = uri), id);
     }
 
     /// =================== EXTERNAL TOKEN HELPERS =================== ///

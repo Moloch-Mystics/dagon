@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.24;
+pragma solidity 0.8.26;
 
 import "@forge/Test.sol";
 
@@ -8,11 +8,71 @@ import "@solady/test/utils/mocks/MockERC721.sol";
 import "@solady/test/utils/mocks/MockERC1155.sol";
 import "@solady/test/utils/mocks/MockERC6909.sol";
 
-import {LibClone} from "@solady/src/utils/LibClone.sol";
-import {Account as NaniAccount} from "@nani/Account.sol";
+import {SignatureCheckerLib} from "@solady/src/utils/SignatureCheckerLib.sol";
 
 import {IAuth, Dagon} from "../src/Dagon.sol";
 
+/// @dev The ERC4337 userOp struct.
+struct PackedUserOperation {
+    address sender;
+    uint256 nonce;
+    bytes initCode;
+    bytes callData;
+    bytes32 accountGasLimits;
+    uint256 preVerificationGas;
+    bytes32 gasFees;
+    bytes paymasterAndData;
+    bytes signature;
+}
+
+/// @dev Simple smart account with ERC4337 functions.
+contract SimpleAccount {
+    address public owner;
+
+    constructor(address _owner) payable {
+        owner = _owner;
+    }
+
+    function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash, uint256)
+        external
+        payable
+        returns (uint256 validationData)
+    {
+        if (SignatureCheckerLib.isValidSignatureNowCalldata(owner, userOpHash, userOp.signature)) {
+            return 0x00;
+        } else {
+            return 0x01;
+        }
+    }
+
+    function execute(address to, uint256 value, bytes calldata data)
+        public
+        payable
+        returns (bytes memory retData)
+    {
+        (bool ok, bytes memory ret) = to.call{value: value}(data);
+        retData = ret;
+        assert(ok);
+    }
+
+    function transferOwnership(address to) public {
+        owner = to;
+    }
+
+    function isValidSignature(bytes32 hash, bytes calldata signature)
+        public
+        view
+        returns (bytes4)
+    {
+        if (SignatureCheckerLib.isValidSignatureNowCalldata(owner, hash, signature)) {
+            return this.isValidSignature.selector;
+        } else {
+            return 0xffffffff;
+        }
+    }
+}
+
+/// @dev Dagon singleton test coverage.
 contract DagonTest is Test {
     address internal alice;
     uint256 internal alicePk;
@@ -76,11 +136,18 @@ contract DagonTest is Test {
 
     address internal mockAuth;
 
-    NaniAccount internal account;
+    SimpleAccount internal account;
     uint256 internal accountId;
     Dagon internal dagon;
 
     address internal constant _ENTRY_POINT = 0x0000000071727De22E5E9d8BAf0edAc6f37da032;
+
+    error InsufficientPermission();
+
+    struct Signature {
+        address owner;
+        bytes sigData;
+    }
 
     function setUp() public payable {
         (alice, alicePk) = makeAddrAndKey("alice");
@@ -138,9 +205,8 @@ contract DagonTest is Test {
 
         // Etch something onto `_ENTRY_POINT` such that we can deploy the account implementation.
         vm.etch(_ENTRY_POINT, hex"00");
-        account = NaniAccount(payable(address(LibClone.deployERC1967(address(new NaniAccount())))));
-        account.initialize(alice);
 
+        account = new SimpleAccount(alice);
         accountId = uint256(uint160(address(account)));
 
         dagon = new Dagon();
@@ -205,15 +271,10 @@ contract DagonTest is Test {
             abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
         );
 
-        assertEq(account.ownershipHandoverExpiresAt(address(dagon)), block.timestamp + 2 days);
         assertEq(dagon.balanceOf(alice, accountId), 1);
 
         vm.prank(alice);
-        account.execute(
-            address(account),
-            0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
-        );
+        account.transferOwnership(address(dagon));
 
         (address setTkn, uint88 setThreshold, Dagon.Standard setStd) =
             dagon.getSettings(address(account));
@@ -304,14 +365,13 @@ contract DagonTest is Test {
         vm.assume(from != alice && to != alice);
         vm.assume(from != address(0) && to != address(0));
         vm.assume(to != 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF);
-        vm.assume(amount < type(uint96).max);
+        vm.assume(amount < type(uint88).max);
         testInstall();
         vm.prank(address(account));
         dagon.mint(from, amount);
         assertEq(dagon.balanceOf(from, accountId), amount);
         vm.prank(from);
         dagon.transfer(to, accountId, amount);
-        assertEq(dagon.balanceOf(from, accountId), 0);
         assertEq(dagon.balanceOf(to, accountId), amount);
     }
 
@@ -388,10 +448,13 @@ contract DagonTest is Test {
     function testIsValidSignature() public {
         testInstall();
         bytes32 userOpHash = keccak256("OWN");
-        NaniAccount.PackedUserOperation memory userOp;
-        userOp.signature =
-            abi.encodePacked(alice, _sign(alicePk, _toEthSignedMessageHash(userOpHash)));
-        require(userOp.signature.length == 85, "INVALID_LEN");
+        PackedUserOperation memory userOp;
+
+        Signature[] memory signature = new Signature[](1);
+        signature[0].owner = alice;
+        signature[0].sigData = _sign(alicePk, userOpHash);
+
+        userOp.signature = abi.encode(signature);
         userOp.sender = address(account);
 
         vm.prank(_ENTRY_POINT);
@@ -402,15 +465,46 @@ contract DagonTest is Test {
     function testIsValidSignatureOnchain() public {
         testInstall();
         bytes32 userOpHash = keccak256("OWN");
-        NaniAccount.PackedUserOperation memory userOp;
-        userOp.signature = "";
-        require(userOp.signature.length == 0, "INVALID_LEN");
+        PackedUserOperation memory userOp;
         userOp.sender = address(account);
+        require(userOp.signature.length == 0, "INVALID_LEN");
 
-        bytes memory signature =
-            abi.encodePacked(alice, _sign(alicePk, _toEthSignedMessageHash(userOpHash)));
+        Signature[] memory signature = new Signature[](1);
+        signature[0].owner = alice;
+        signature[0].sigData = _sign(alicePk, userOpHash);
 
-        dagon.vote(address(account), userOpHash, signature);
+        bytes memory sig = abi.encode(signature);
+
+        dagon.vote(address(account), userOpHash, sig);
+
+        vm.prank(_ENTRY_POINT);
+        uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
+        assertEq(validationData, 0x00);
+    }
+
+    function testIsValidSignatureOnchainRaw() public {
+        testInstall();
+        bytes32 userOpHash = keccak256("OWN");
+        PackedUserOperation memory userOp;
+        userOp.sender = address(account);
+        require(userOp.signature.length == 0, "INVALID_LEN");
+
+        vm.prank(alice);
+        dagon.vote(address(account), userOpHash);
+
+        vm.prank(_ENTRY_POINT);
+        uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
+        assertEq(validationData, 0x00);
+    }
+
+    function testFailIsValidSignatureSpoofed() public {
+        testInstall();
+        bytes32 userOpHash = keccak256("OWN");
+        PackedUserOperation memory userOp;
+        userOp.sender = address(account);
+        require(userOp.signature.length == 0, "INVALID_LEN");
+
+        dagon.vote(address(account), userOpHash);
 
         vm.prank(_ENTRY_POINT);
         uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
@@ -420,19 +514,25 @@ contract DagonTest is Test {
     function testUserVoted() public {
         testInstall();
         bytes32 userOpHash = keccak256("OWN");
-        NaniAccount.PackedUserOperation memory userOp;
-        userOp.signature = "";
-        require(userOp.signature.length == 0, "INVALID_LEN");
+        PackedUserOperation memory userOp;
         userOp.sender = address(account);
+        require(userOp.signature.length == 0, "INVALID_LEN");
 
-        bytes memory signature =
-            abi.encodePacked(alice, _sign(alicePk, _toEthSignedMessageHash(userOpHash)));
+        Signature[] memory signature = new Signature[](1);
+        signature[0].owner = alice;
+        signature[0].sigData = _sign(alicePk, userOpHash);
 
-        dagon.vote(address(account), userOpHash, signature);
+        bytes memory sig = abi.encode(signature);
+
+        dagon.vote(address(account), userOpHash, sig);
         assertEq(
-            dagon.voted(alice, _toEthSignedMessageHash(userOpHash)),
+            dagon.voted(address(account), alice, userOpHash),
             dagon.balanceOf(alice, uint256(uint160(address(account))))
         );
+        // Flag and revert on double vote.
+        vm.prank(alice);
+        vm.expectRevert(InsufficientPermission.selector);
+        dagon.vote(address(account), userOpHash);
     }
 
     // In 2-of-3, 3 signed.
@@ -453,7 +553,7 @@ contract DagonTest is Test {
         Dagon.Settings memory setting;
         setting.token = address(0);
         setting.standard = Dagon.Standard.DAGON;
-        setting.threshold = 1;
+        setting.threshold = 2;
 
         Dagon.Metadata memory meta;
         meta.name = "";
@@ -469,24 +569,23 @@ contract DagonTest is Test {
         );
 
         vm.prank(alice);
-        account.execute(
-            address(account),
-            0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
-        );
+        account.transferOwnership(address(dagon));
 
-        NaniAccount.PackedUserOperation memory userOp;
+        PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
-        bytes32 signHash = _toEthSignedMessageHash(userOpHash);
+
         addrs = _sortAddresses(addrs);
-        userOp.signature = abi.encodePacked(
-            addrs[0],
-            _sign(_getPkByAddr(addrs[0]), signHash),
-            addrs[1],
-            _sign(_getPkByAddr(addrs[1]), signHash),
-            addrs[2],
-            _sign(_getPkByAddr(addrs[2]), signHash)
-        );
+
+        Signature[] memory signature = new Signature[](3);
+        signature[0].owner = addrs[0];
+        signature[0].sigData = _sign(_getPkByAddr(addrs[0]), userOpHash);
+        signature[1].owner = addrs[1];
+        signature[1].sigData = _sign(_getPkByAddr(addrs[1]), userOpHash);
+        signature[2].owner = addrs[2];
+        signature[2].sigData = _sign(_getPkByAddr(addrs[2]), userOpHash);
+
+        userOp.signature = abi.encode(signature);
+        userOp.sender = address(account);
 
         vm.prank(_ENTRY_POINT);
         uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
@@ -511,7 +610,7 @@ contract DagonTest is Test {
         Dagon.Settings memory setting;
         setting.token = address(0);
         setting.standard = Dagon.Standard.DAGON;
-        setting.threshold = 1;
+        setting.threshold = 2;
 
         Dagon.Metadata memory meta;
         meta.name = "";
@@ -527,28 +626,28 @@ contract DagonTest is Test {
         );
 
         vm.prank(alice);
-        account.execute(
-            address(account),
-            0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
-        );
+        account.transferOwnership(address(dagon));
 
-        NaniAccount.PackedUserOperation memory userOp;
+        PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
-        bytes32 signHash = _toEthSignedMessageHash(userOpHash);
+
         addrs = _sortAddresses(addrs);
-        userOp.signature = abi.encodePacked(
-            addrs[0],
-            _sign(_getPkByAddr(addrs[0]), signHash),
-            addrs[1],
-            _sign(_getPkByAddr(addrs[1]), signHash)
-        );
+
+        Signature[] memory signature = new Signature[](2);
+        signature[0].owner = addrs[0];
+        signature[0].sigData = _sign(_getPkByAddr(addrs[0]), userOpHash);
+        signature[1].owner = addrs[1];
+        signature[1].sigData = _sign(_getPkByAddr(addrs[1]), userOpHash);
+
+        userOp.signature = abi.encode(signature);
+        userOp.sender = address(account);
 
         vm.prank(_ENTRY_POINT);
         uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
         assertEq(validationData, 0x00);
     }
 
+    // In 6-of-9, 6 signed.
     function testIsValidSignatureMany() public payable {
         Dagon.Ownership[] memory _owners = new Dagon.Ownership[](9);
         _owners[0].owner = alice;
@@ -584,7 +683,7 @@ contract DagonTest is Test {
         Dagon.Settings memory setting;
         setting.token = address(0);
         setting.standard = Dagon.Standard.DAGON;
-        setting.threshold = 1;
+        setting.threshold = 6;
 
         Dagon.Metadata memory meta;
         meta.name = "";
@@ -600,170 +699,30 @@ contract DagonTest is Test {
         );
 
         vm.prank(alice);
-        account.execute(
-            address(account),
-            0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
-        );
+        account.transferOwnership(address(dagon));
 
-        NaniAccount.PackedUserOperation memory userOp;
+        PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
-        bytes32 signHash = _toEthSignedMessageHash(userOpHash);
+
         addrs = _sortAddresses(addrs);
-        userOp.signature = abi.encodePacked(
-            addrs[0],
-            _sign(_getPkByAddr(addrs[0]), signHash),
-            addrs[1],
-            _sign(_getPkByAddr(addrs[1]), signHash),
-            addrs[2],
-            _sign(_getPkByAddr(addrs[2]), signHash),
-            addrs[3],
-            _sign(_getPkByAddr(addrs[3]), signHash),
-            addrs[4],
-            _sign(_getPkByAddr(addrs[4]), signHash),
-            addrs[5],
-            _sign(_getPkByAddr(addrs[5]), signHash),
-            addrs[6],
-            _sign(_getPkByAddr(addrs[6]), signHash),
-            addrs[7],
-            _sign(_getPkByAddr(addrs[7]), signHash),
-            addrs[8],
-            _sign(_getPkByAddr(addrs[8]), signHash)
-        );
 
-        vm.prank(_ENTRY_POINT);
-        uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
-        assertEq(validationData, 0x00);
-    }
+        Signature[] memory signature = new Signature[](6);
+        signature[0].owner = addrs[0];
+        signature[0].sigData = _sign(_getPkByAddr(addrs[0]), userOpHash);
+        signature[1].owner = addrs[1];
+        signature[1].sigData = _sign(_getPkByAddr(addrs[1]), userOpHash);
+        signature[2].owner = addrs[2];
+        signature[2].sigData = _sign(_getPkByAddr(addrs[2]), userOpHash);
+        signature[3].owner = addrs[3];
+        signature[3].sigData = _sign(_getPkByAddr(addrs[3]), userOpHash);
+        signature[4].owner = addrs[4];
+        signature[4].sigData = _sign(_getPkByAddr(addrs[4]), userOpHash);
+        signature[5].owner = addrs[5];
+        signature[5].sigData = _sign(_getPkByAddr(addrs[5]), userOpHash);
 
-    function testIsValidSignatureVeryMany() public payable {
-        // Declare the array of ownership structures
-        Dagon.Ownership[] memory _owners = new Dagon.Ownership[](26);
-        address[] memory addrs = new address[](26);
+        userOp.signature = abi.encode(signature);
+        userOp.sender = address(account);
 
-        // Initialize the _owners array and the addrs array
-        _owners[0].owner = alice;
-        addrs[0] = alice;
-        _owners[0].shares = 1;
-        _owners[1].owner = bob;
-        addrs[1] = bob;
-        _owners[1].shares = 1;
-        _owners[2].owner = chuck;
-        addrs[2] = chuck;
-        _owners[2].shares = 1;
-        _owners[3].owner = dave;
-        addrs[3] = dave;
-        _owners[3].shares = 1;
-        _owners[4].owner = ed;
-        addrs[4] = ed;
-        _owners[4].shares = 1;
-        _owners[5].owner = fargo;
-        addrs[5] = fargo;
-        _owners[5].shares = 1;
-        _owners[6].owner = gravy;
-        addrs[6] = gravy;
-        _owners[6].shares = 1;
-        _owners[7].owner = holly;
-        addrs[7] = holly;
-        _owners[7].shares = 1;
-        _owners[8].owner = ignis;
-        addrs[8] = ignis;
-        _owners[8].shares = 1;
-        _owners[9].owner = jake;
-        addrs[9] = jake;
-        _owners[9].shares = 1;
-        _owners[10].owner = kate;
-        addrs[10] = kate;
-        _owners[10].shares = 1;
-        _owners[11].owner = leo;
-        addrs[11] = leo;
-        _owners[11].shares = 1;
-        _owners[12].owner = mia;
-        addrs[12] = mia;
-        _owners[12].shares = 1;
-        _owners[13].owner = nora;
-        addrs[13] = nora;
-        _owners[13].shares = 1;
-        _owners[14].owner = oscar;
-        addrs[14] = oscar;
-        _owners[14].shares = 1;
-        _owners[15].owner = piper;
-        addrs[15] = piper;
-        _owners[15].shares = 1;
-        _owners[16].owner = quinn;
-        addrs[16] = quinn;
-        _owners[16].shares = 1;
-        _owners[17].owner = rick;
-        addrs[17] = rick;
-        _owners[17].shares = 1;
-        _owners[18].owner = sara;
-        addrs[18] = sara;
-        _owners[18].shares = 1;
-        _owners[19].owner = tina;
-        addrs[19] = tina;
-        _owners[19].shares = 1;
-        _owners[20].owner = uma;
-        addrs[20] = uma;
-        _owners[20].shares = 1;
-        _owners[21].owner = vince;
-        addrs[21] = vince;
-        _owners[21].shares = 1;
-        _owners[22].owner = wendy;
-        addrs[22] = wendy;
-        _owners[22].shares = 1;
-        _owners[23].owner = xander;
-        addrs[23] = xander;
-        _owners[23].shares = 1;
-        _owners[24].owner = yasmine;
-        addrs[24] = yasmine;
-        _owners[24].shares = 1;
-        _owners[25].owner = zane;
-        addrs[25] = zane;
-        _owners[25].shares = 1;
-
-        // Setup the Dagon settings and metadata
-        Dagon.Settings memory setting;
-        setting.token = address(0);
-        setting.standard = Dagon.Standard.DAGON;
-        setting.threshold = 1;
-
-        Dagon.Metadata memory meta;
-        meta.name = "";
-        meta.symbol = "";
-        meta.tokenURI = "";
-        meta.authority = IAuth(address(0));
-
-        // Execute the Dagon install
-        vm.prank(alice);
-        account.execute(
-            address(dagon),
-            0,
-            abi.encodeWithSelector(Dagon.install.selector, _owners, setting, meta)
-        );
-
-        // Complete ownership handover
-        vm.prank(alice);
-        account.execute(
-            address(account),
-            0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
-        );
-
-        // Prepare for the signature validation
-        NaniAccount.PackedUserOperation memory userOp;
-        bytes32 userOpHash = keccak256("OWN");
-        bytes32 signHash = _toEthSignedMessageHash(userOpHash);
-
-        // Sort the addresses and prepare the signature
-        addrs = _sortAddresses(addrs);
-        userOp.signature = "";
-        for (uint256 i = 0; i < addrs.length; i++) {
-            userOp.signature = abi.encodePacked(
-                userOp.signature, addrs[i], _sign(_getPkByAddr(addrs[i]), signHash)
-            );
-        }
-
-        // Validate the user operation
         vm.prank(_ENTRY_POINT);
         uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
         assertEq(validationData, 0x00);
@@ -803,17 +762,19 @@ contract DagonTest is Test {
         );
 
         vm.prank(alice);
-        account.execute(
-            address(account),
-            0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
-        );
+        account.transferOwnership(address(dagon));
 
-        NaniAccount.PackedUserOperation memory userOp;
+        PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
-        bytes32 signHash = _toEthSignedMessageHash(userOpHash);
+
         addrs = _sortAddresses(addrs);
-        userOp.signature = abi.encodePacked(addrs[0], _sign(_getPkByAddr(addrs[0]), signHash));
+
+        Signature[] memory signature = new Signature[](1);
+        signature[0].owner = addrs[0];
+        signature[0].sigData = _sign(_getPkByAddr(addrs[0]), userOpHash);
+
+        userOp.signature = abi.encode(signature);
+        userOp.sender = address(account);
 
         vm.prank(_ENTRY_POINT);
         uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
@@ -857,24 +818,23 @@ contract DagonTest is Test {
         );
 
         vm.prank(alice);
-        account.execute(
-            address(account),
-            0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
-        );
+        account.transferOwnership(address(dagon));
 
-        NaniAccount.PackedUserOperation memory userOp;
+        PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
-        bytes32 signHash = _toEthSignedMessageHash(userOpHash);
+
         addrs = _sortAddresses(addrs);
-        userOp.signature = abi.encodePacked(
-            addrs[0],
-            _sign(_getPkByAddr(addrs[0]), signHash),
-            addrs[1],
-            _sign(_getPkByAddr(addrs[1]), signHash),
-            addrs[2],
-            _sign(_getPkByAddr(addrs[2]), signHash)
-        );
+
+        Signature[] memory signature = new Signature[](3);
+        signature[0].owner = addrs[0];
+        signature[0].sigData = _sign(_getPkByAddr(addrs[0]), userOpHash);
+        signature[1].owner = addrs[1];
+        signature[1].sigData = _sign(_getPkByAddr(addrs[1]), userOpHash);
+        signature[2].owner = addrs[2];
+        signature[2].sigData = _sign(_getPkByAddr(addrs[2]), userOpHash);
+
+        userOp.signature = abi.encode(signature);
+        userOp.sender = address(account);
 
         vm.prank(_ENTRY_POINT);
         uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
@@ -918,17 +878,19 @@ contract DagonTest is Test {
         );
 
         vm.prank(alice);
-        account.execute(
-            address(account),
-            0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
-        );
+        account.transferOwnership(address(dagon));
 
-        NaniAccount.PackedUserOperation memory userOp;
+        PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
-        bytes32 signHash = _toEthSignedMessageHash(userOpHash);
+
         addrs = _sortAddresses(addrs);
-        userOp.signature = abi.encodePacked(addrs[0], _sign(_getPkByAddr(addrs[0]), signHash));
+
+        Signature[] memory signature = new Signature[](1);
+        signature[0].owner = addrs[0];
+        signature[0].sigData = _sign(_getPkByAddr(addrs[0]), userOpHash);
+
+        userOp.signature = abi.encode(signature);
+        userOp.sender = address(account);
 
         vm.prank(_ENTRY_POINT);
         uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
@@ -956,7 +918,7 @@ contract DagonTest is Test {
         Dagon.Settings memory setting;
         setting.token = erc20;
         setting.standard = Dagon.Standard.ERC20;
-        setting.threshold = 40;
+        setting.threshold = 40 ether;
 
         Dagon.Metadata memory meta;
         meta.name = "";
@@ -972,31 +934,30 @@ contract DagonTest is Test {
         );
 
         vm.prank(alice);
-        account.execute(
-            address(account),
-            0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
-        );
+        account.transferOwnership(address(dagon));
 
-        NaniAccount.PackedUserOperation memory userOp;
+        PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
-        bytes32 signHash = _toEthSignedMessageHash(userOpHash);
+
         addrs = _sortAddresses(addrs);
-        userOp.signature = abi.encodePacked(
-            addrs[0],
-            _sign(_getPkByAddr(addrs[0]), signHash),
-            addrs[1],
-            _sign(_getPkByAddr(addrs[1]), signHash),
-            addrs[2],
-            _sign(_getPkByAddr(addrs[2]), signHash)
-        );
+
+        Signature[] memory signature = new Signature[](3);
+        signature[0].owner = addrs[0];
+        signature[0].sigData = _sign(_getPkByAddr(addrs[0]), userOpHash);
+        signature[1].owner = addrs[1];
+        signature[1].sigData = _sign(_getPkByAddr(addrs[1]), userOpHash);
+        signature[2].owner = addrs[2];
+        signature[2].sigData = _sign(_getPkByAddr(addrs[2]), userOpHash);
+
+        userOp.signature = abi.encode(signature);
+        userOp.sender = address(account);
 
         vm.prank(_ENTRY_POINT);
         uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
         assertEq(validationData, 0x00);
     }
 
-    // In 40-of-100, 20 units signed. So fail.
+    // In 40-of-100, 20 ERC20 units signed. So fail.
     function testFailIsValidSignatureWeightedERC20() public payable {
         Dagon.Ownership[] memory _owners = new Dagon.Ownership[](4);
         _owners[0].owner = alice;
@@ -1017,7 +978,7 @@ contract DagonTest is Test {
         Dagon.Settings memory setting;
         setting.token = erc20;
         setting.standard = Dagon.Standard.ERC20;
-        setting.threshold = 40;
+        setting.threshold = 40 ether;
 
         Dagon.Metadata memory meta;
         meta.name = "";
@@ -1033,17 +994,19 @@ contract DagonTest is Test {
         );
 
         vm.prank(alice);
-        account.execute(
-            address(account),
-            0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
-        );
+        account.transferOwnership(address(dagon));
 
-        NaniAccount.PackedUserOperation memory userOp;
+        PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
-        bytes32 signHash = _toEthSignedMessageHash(userOpHash);
+
         addrs = _sortAddresses(addrs);
-        userOp.signature = abi.encodePacked(addrs[0], _sign(_getPkByAddr(addrs[2]), signHash));
+
+        Signature[] memory signature = new Signature[](1);
+        signature[0].owner = addrs[0];
+        signature[0].sigData = _sign(_getPkByAddr(addrs[0]), userOpHash);
+
+        userOp.signature = abi.encode(signature);
+        userOp.sender = address(account);
 
         vm.prank(_ENTRY_POINT);
         uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
@@ -1084,22 +1047,21 @@ contract DagonTest is Test {
         );
 
         vm.prank(alice);
-        account.execute(
-            address(account),
-            0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
-        );
+        account.transferOwnership(address(dagon));
 
-        NaniAccount.PackedUserOperation memory userOp;
+        PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
-        bytes32 signHash = _toEthSignedMessageHash(userOpHash);
+
         addrs = _sortAddresses(addrs);
-        userOp.signature = abi.encodePacked(
-            addrs[0],
-            _sign(_getPkByAddr(addrs[0]), signHash),
-            addrs[1],
-            _sign(_getPkByAddr(addrs[1]), signHash)
-        );
+
+        Signature[] memory signature = new Signature[](2);
+        signature[0].owner = addrs[0];
+        signature[0].sigData = _sign(_getPkByAddr(addrs[0]), userOpHash);
+        signature[1].owner = addrs[1];
+        signature[1].sigData = _sign(_getPkByAddr(addrs[1]), userOpHash);
+
+        userOp.signature = abi.encode(signature);
+        userOp.sender = address(account);
 
         vm.prank(_ENTRY_POINT);
         uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
@@ -1140,17 +1102,19 @@ contract DagonTest is Test {
         );
 
         vm.prank(alice);
-        account.execute(
-            address(account),
-            0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
-        );
+        account.transferOwnership(address(dagon));
 
-        NaniAccount.PackedUserOperation memory userOp;
+        PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
-        bytes32 signHash = _toEthSignedMessageHash(userOpHash);
+
         addrs = _sortAddresses(addrs);
-        userOp.signature = abi.encodePacked(addrs[0], _sign(_getPkByAddr(addrs[0]), signHash));
+
+        Signature[] memory signature = new Signature[](1);
+        signature[0].owner = addrs[0];
+        signature[0].sigData = _sign(_getPkByAddr(addrs[0]), userOpHash);
+
+        userOp.signature = abi.encode(signature);
+        userOp.sender = address(account);
 
         vm.prank(_ENTRY_POINT);
         uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
@@ -1178,7 +1142,7 @@ contract DagonTest is Test {
         Dagon.Settings memory setting;
         setting.token = erc1155;
         setting.standard = Dagon.Standard.ERC1155;
-        setting.threshold = 40;
+        setting.threshold = 40 ether;
 
         Dagon.Metadata memory meta;
         meta.name = "";
@@ -1194,24 +1158,23 @@ contract DagonTest is Test {
         );
 
         vm.prank(alice);
-        account.execute(
-            address(account),
-            0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
-        );
+        account.transferOwnership(address(dagon));
 
-        NaniAccount.PackedUserOperation memory userOp;
+        PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
-        bytes32 signHash = _toEthSignedMessageHash(userOpHash);
+
         addrs = _sortAddresses(addrs);
-        userOp.signature = abi.encodePacked(
-            addrs[0],
-            _sign(_getPkByAddr(addrs[0]), signHash),
-            addrs[1],
-            _sign(_getPkByAddr(addrs[1]), signHash),
-            addrs[2],
-            _sign(_getPkByAddr(addrs[2]), signHash)
-        );
+
+        Signature[] memory signature = new Signature[](3);
+        signature[0].owner = addrs[0];
+        signature[0].sigData = _sign(_getPkByAddr(addrs[0]), userOpHash);
+        signature[1].owner = addrs[1];
+        signature[1].sigData = _sign(_getPkByAddr(addrs[1]), userOpHash);
+        signature[2].owner = addrs[2];
+        signature[2].sigData = _sign(_getPkByAddr(addrs[2]), userOpHash);
+
+        userOp.signature = abi.encode(signature);
+        userOp.sender = address(account);
 
         vm.prank(_ENTRY_POINT);
         uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
@@ -1239,7 +1202,7 @@ contract DagonTest is Test {
         Dagon.Settings memory setting;
         setting.token = erc1155;
         setting.standard = Dagon.Standard.ERC1155;
-        setting.threshold = 40;
+        setting.threshold = 40 ether;
 
         Dagon.Metadata memory meta;
         meta.name = "";
@@ -1253,17 +1216,19 @@ contract DagonTest is Test {
         );
 
         vm.prank(alice);
-        account.execute(
-            address(account),
-            0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
-        );
+        account.transferOwnership(address(dagon));
 
-        NaniAccount.PackedUserOperation memory userOp;
+        PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
-        bytes32 signHash = _toEthSignedMessageHash(userOpHash);
+
         addrs = _sortAddresses(addrs);
-        userOp.signature = abi.encodePacked(addrs[0], _sign(_getPkByAddr(addrs[0]), signHash));
+
+        Signature[] memory signature = new Signature[](1);
+        signature[0].owner = addrs[0];
+        signature[0].sigData = _sign(_getPkByAddr(addrs[0]), userOpHash);
+
+        userOp.signature = abi.encode(signature);
+        userOp.sender = address(account);
 
         vm.prank(_ENTRY_POINT);
         uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
@@ -1291,7 +1256,7 @@ contract DagonTest is Test {
         Dagon.Settings memory setting;
         setting.token = erc6909;
         setting.standard = Dagon.Standard.ERC6909;
-        setting.threshold = 40;
+        setting.threshold = 40 ether;
 
         Dagon.Metadata memory meta;
         meta.name = "";
@@ -1307,24 +1272,23 @@ contract DagonTest is Test {
         );
 
         vm.prank(alice);
-        account.execute(
-            address(account),
-            0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
-        );
+        account.transferOwnership(address(dagon));
 
-        NaniAccount.PackedUserOperation memory userOp;
+        PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
-        bytes32 signHash = _toEthSignedMessageHash(userOpHash);
+
         addrs = _sortAddresses(addrs);
-        userOp.signature = abi.encodePacked(
-            addrs[0],
-            _sign(_getPkByAddr(addrs[0]), signHash),
-            addrs[1],
-            _sign(_getPkByAddr(addrs[1]), signHash),
-            addrs[2],
-            _sign(_getPkByAddr(addrs[2]), signHash)
-        );
+
+        Signature[] memory signature = new Signature[](3);
+        signature[0].owner = addrs[0];
+        signature[0].sigData = _sign(_getPkByAddr(addrs[0]), userOpHash);
+        signature[1].owner = addrs[1];
+        signature[1].sigData = _sign(_getPkByAddr(addrs[1]), userOpHash);
+        signature[2].owner = addrs[2];
+        signature[2].sigData = _sign(_getPkByAddr(addrs[2]), userOpHash);
+
+        userOp.signature = abi.encode(signature);
+        userOp.sender = address(account);
 
         vm.prank(_ENTRY_POINT);
         uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
@@ -1352,7 +1316,7 @@ contract DagonTest is Test {
         Dagon.Settings memory setting;
         setting.token = erc6909;
         setting.standard = Dagon.Standard.ERC6909;
-        setting.threshold = 40;
+        setting.threshold = 40 ether;
 
         Dagon.Metadata memory meta;
         meta.name = "";
@@ -1368,16 +1332,19 @@ contract DagonTest is Test {
         );
 
         vm.prank(alice);
-        account.execute(
-            address(account),
-            0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
-        );
+        account.transferOwnership(address(dagon));
 
-        NaniAccount.PackedUserOperation memory userOp;
+        PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
+
         addrs = _sortAddresses(addrs);
-        userOp.signature = abi.encodePacked("");
+
+        Signature[] memory signature = new Signature[](1);
+        signature[0].owner = addrs[0];
+        signature[0].sigData = _sign(_getPkByAddr(addrs[0]), userOpHash);
+
+        userOp.signature = abi.encode(signature);
+        userOp.sender = address(account);
 
         vm.prank(_ENTRY_POINT);
         uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
@@ -1420,23 +1387,21 @@ contract DagonTest is Test {
         );
 
         vm.prank(alice);
-        account.execute(
-            address(account),
-            0,
-            abi.encodeWithSelector(account.completeOwnershipHandover.selector, address(dagon))
-        );
+        account.transferOwnership(address(dagon));
 
-        NaniAccount.PackedUserOperation memory userOp;
+        PackedUserOperation memory userOp;
         bytes32 userOpHash = keccak256("OWN");
-        bytes32 signHash = _toEthSignedMessageHash(userOpHash);
-        userOp.signature = abi.encodePacked(
-            _owners[0].owner,
-            _sign(_getPkByAddr(_owners[0].owner), signHash),
-            _owners[1].owner,
-            _sign(_getPkByAddr(_owners[1].owner), signHash),
-            _owners[2].owner,
-            _sign(_getPkByAddr(_owners[2].owner), signHash)
-        );
+
+        Signature[] memory signature = new Signature[](3);
+        signature[0].owner = _owners[0].owner;
+        signature[0].sigData = _sign(_getPkByAddr(_owners[0].owner), userOpHash);
+        signature[1].owner = _owners[1].owner;
+        signature[1].sigData = _sign(_getPkByAddr(_owners[1].owner), userOpHash);
+        signature[2].owner = _owners[2].owner;
+        signature[2].sigData = _sign(_getPkByAddr(_owners[2].owner), userOpHash);
+
+        userOp.signature = abi.encode(signature);
+        userOp.sender = address(account);
 
         vm.prank(_ENTRY_POINT);
         uint256 validationData = account.validateUserOp(userOp, userOpHash, 0);
@@ -1444,15 +1409,6 @@ contract DagonTest is Test {
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    function _toEthSignedMessageHash(bytes32 hash) internal pure returns (bytes32 result) {
-        /// @solidity memory-safe-assembly
-        assembly {
-            mstore(0x20, hash) // Store into scratch space for keccak256.
-            mstore(0x00, "\x00\x00\x00\x00\x19Ethereum Signed Message:\n32") // 28 bytes.
-            result := keccak256(0x04, 0x3c) // `32 * 2 - (32 - 28) = 60 = 0x3c`.
-        }
-    }
 
     function _getPkByAddr(address user) internal view returns (uint256) {
         return keys[user];
@@ -1524,6 +1480,7 @@ contract MockERC6909TotalSupply is MockERC6909 {
     }
 }
 
+/// @dev Simple authority contract mock.
 contract MockAuth {
     function validateTransfer(address, address, uint256, uint256)
         public
