@@ -1,10 +1,10 @@
 # Dagon
-[Git Source](https://github.com/Moloch-Mystics/dagon/blob/efc921a89c26d7bf4ef258e73ffcf64e1bdef80a/src/Dagon.sol)
+[Git Source](https://github.com/Moloch-Mystics/dagon/blob/405e4eb5a2a407d3f2421047d8b8f778ad336343/src/Dagon.sol)
 
 **Inherits:**
 ERC6909
 
-Simple ownership singleton for smart accounts. Version 1.
+Simple ownership singleton for smart accounts. Version 1x.
 
 
 ## State Variables
@@ -30,20 +30,21 @@ mapping(address account => Settings) internal _settings;
 
 
 ### votingTally
-*Stores mapping of voting tallies to signed userOp hashes.*
+*Stores mapping of voting tallies to account operation hashes.*
 
 
 ```solidity
-mapping(bytes32 signedHash => uint256) public votingTally;
+mapping(address account => mapping(bytes32 hash => uint256)) public votingTally;
 ```
 
 
 ### voted
-*Stores mapping of account owner voting shares cast on signed userOp hashes.*
+*Stores mapping of account owner shares cast on account operation hashes.*
 
 
 ```solidity
-mapping(address owner => mapping(bytes32 signedHash => uint256 shares)) public voted;
+mapping(address account => mapping(address owner => mapping(bytes32 hash => uint256 shares))) public
+    voted;
 ```
 
 
@@ -123,7 +124,6 @@ note: This is expected to be called in a validator plugin-like userOp flow.*
 ```solidity
 function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash, uint256)
     public
-    payable
     virtual
     returns (uint256 validationData);
 ```
@@ -141,15 +141,23 @@ function _validateReturn(bool success) internal pure virtual returns (bytes4 res
 
 ===================== VOTING OPERATIONS ===================== ///
 
-*Casts account owner voting shares on a given ERC4337 userOp hash.*
+*Casts account owners' voting shares on a given operation hash.*
 
 
 ```solidity
-function vote(address account, bytes32 userOpHash, bytes calldata signature)
+function vote(address account, bytes32 hash, bytes calldata signature)
     public
-    payable
     virtual
     returns (uint256);
+```
+
+### vote
+
+*Casts caller voting shares on a given operation hash and returns tally.*
+
+
+```solidity
+function vote(address account, bytes32 hash) public virtual returns (uint256);
 ```
 
 ### install
@@ -165,7 +173,6 @@ https://github.com/Vectorized/solady/blob/main/src/auth/Ownable.sol*
 ```solidity
 function install(Ownership[] calldata owners, Settings calldata setting, Metadata calldata meta)
     public
-    payable
     virtual;
 ```
 
@@ -186,7 +193,7 @@ function getSettings(address account) public view virtual returns (address, uint
 
 
 ```solidity
-function setAuth(IAuth auth) public payable virtual;
+function setAuth(IAuth auth) public virtual;
 ```
 
 ### setToken
@@ -195,7 +202,7 @@ function setAuth(IAuth auth) public payable virtual;
 
 
 ```solidity
-function setToken(address token, Standard standard) public payable virtual;
+function setToken(address token, Standard standard) public virtual;
 ```
 
 ### setThreshold
@@ -204,7 +211,7 @@ function setToken(address token, Standard standard) public payable virtual;
 
 
 ```solidity
-function setThreshold(uint88 threshold) public payable virtual;
+function setThreshold(uint88 threshold) public virtual;
 ```
 
 ### getMetadata
@@ -228,7 +235,7 @@ function getMetadata(address account)
 
 
 ```solidity
-function mint(address owner, uint96 shares) public payable virtual;
+function mint(address owner, uint96 shares) public virtual;
 ```
 
 ### burn
@@ -237,7 +244,7 @@ function mint(address owner, uint96 shares) public payable virtual;
 
 
 ```solidity
-function burn(address owner, uint96 shares) public payable virtual;
+function burn(address owner, uint96 shares) public virtual;
 ```
 
 ### setURI
@@ -246,7 +253,7 @@ function burn(address owner, uint96 shares) public payable virtual;
 
 
 ```solidity
-function setURI(string calldata uri) public payable virtual;
+function setURI(string calldata uri) public virtual;
 ```
 
 ### _balanceOf
@@ -311,22 +318,22 @@ function _beforeTokenTransfer(address from, address to, uint256 id, uint256 amou
 ```
 
 ## Events
-### AuthSet
+### URI
 =========================== EVENTS =========================== ///
 
+*Logs new metadata for an account ID.*
+
+
+```solidity
+event URI(string uri, uint256 indexed id);
+```
+
+### AuthSet
 *Logs new authority contract for an account.*
 
 
 ```solidity
 event AuthSet(address indexed account, IAuth auth);
-```
-
-### URISet
-*Logs new token uri settings for an account.*
-
-
-```solidity
-event URISet(address indexed account, string uri);
 ```
 
 ### ThresholdSet
@@ -381,6 +388,17 @@ struct Metadata {
 struct Ownership {
     address owner;
     uint96 shares;
+}
+```
+
+### Signature
+*The signature struct.*
+
+
+```solidity
+struct Signature {
+    address owner;
+    bytes sigData;
 }
 ```
 

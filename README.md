@@ -5,11 +5,11 @@
 
 Built with *[Foundry](https://github.com/foundry-rs/forge-std)* and *[Solady](https://github.com/vectorized/solady)*.
 
-## [Beta Deployment](https://contractscan.xyz/contract/0x0000000000001ADDcB933DD5028159dc965b5b7f)
+## [Beta Deployment](https://contractscan.xyz/contract/0x000000000000FEb893BB5D63bA33323EdCC237cE)
 
 Chains           | Address                                 | 
 ----------------|-----------------------------------------|
-Ethereum, Arbitrum, Optimism, Base, Blast, Zora, Gnosis, Polygon, Avalanche and BNB (& testnets) | [0x0000000000001ADDcB933DD5028159dc965b5b7f](https://etherscan.io/address/0x0000000000001ADDcB933DD5028159dc965b5b7f#code) |
+Ethereum, Arbitrum, Optimism, Base, Blast, Zora, Gnosis, Polygon, Avalanche and BNB (& testnets) | [0x000000000000FEb893BB5D63bA33323EdCC237cE](https://etherscan.io/address/0x000000000000FEb893BB5D63bA33323EdCC237cE#code) |
 
 Dagon deployments are generated as [efficient create2 addresses](https://medium.com/coinmonks/on-efficient-ethereum-addresses-3fef0596e263) through the [canonical create2 factory](https://etherscan.io/address/0x0000000000ffe8b47b3e2130213b802212439497#code). As such they share the same exact address and code on every blockchain.
 
