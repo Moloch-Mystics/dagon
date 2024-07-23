@@ -1,5 +1,5 @@
 # IAuth
-[Git Source](https://github.com/Moloch-Mystics/dagon/blob/405e4eb5a2a407d3f2421047d8b8f778ad336343/src/Dagon.sol)
+[Git Source](https://github.com/Moloch-Mystics/dagon/blob/d39dde7073476515dbf75345b60f2ea3d623186a/src/Dagon.sol)
 
 Simple authority interface for contracts.
 

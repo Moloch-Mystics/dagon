@@ -1,5 +1,5 @@
 # Summoner
-[Git Source](https://github.com/Moloch-Mystics/dagon/blob/efc921a89c26d7bf4ef258e73ffcf64e1bdef80a/src/Summoner.sol)
+[Git Source](https://github.com/Moloch-Mystics/dagon/blob/d39dde7073476515dbf75345b60f2ea3d623186a/src/Summoner.sol)
 
 Simple summoner for Dagon (𒀭) group accounts.
 
@@ -8,14 +8,14 @@ Simple summoner for Dagon (𒀭) group accounts.
 ### DAGON
 
 ```solidity
-address internal constant DAGON = 0x0000000000001ADDcB933DD5028159dc965b5b7f;
+address internal constant DAGON = 0x000000000000FEb893BB5D63bA33323EdCC237cE;
 ```
 
 
 ### FACTORY
 
 ```solidity
-IAccounts internal constant FACTORY = IAccounts(0x000000000000dD366cc2E4432bB998e41DFD47C7);
+IAccounts internal constant FACTORY = IAccounts(0x0000000000009f1E546FC4A8F68eB98031846cb8);
 ```
 
 

@@ -11,6 +11,8 @@ Chains           | Address                                 |
 ----------------|-----------------------------------------|
 Ethereum, Arbitrum, Optimism, Base, Blast, Zora, Gnosis, Polygon, Avalanche and BNB (& testnets) | [0x000000000000FEb893BB5D63bA33323EdCC237cE](https://etherscan.io/address/0x000000000000FEb893BB5D63bA33323EdCC237cE#code) |
 
+> Summoner: [0x000000004356af01f3b800d93b0066e4b71e3609](https://etherscan.io/address/0x000000004356af01f3b800d93b0066e4b71e3609#code)
+
 Dagon deployments are generated as [efficient create2 addresses](https://medium.com/coinmonks/on-efficient-ethereum-addresses-3fef0596e263) through the [canonical create2 factory](https://etherscan.io/address/0x0000000000ffe8b47b3e2130213b802212439497#code). As such they share the same exact address and code on every blockchain.
 
 ## Premise
